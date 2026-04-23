@@ -1,0 +1,579 @@
+import { Request, Response } from "express";
+import { z } from "zod";
+import mongoose, { SortOrder } from "mongoose";
+import Post from "../models/Post";
+import PostComment from "../models/PostComment";
+import PostVote, { VoteType } from "../models/PostVote";
+import User from "../models/User";
+import { AuthRequest } from "../middleware/authMiddleware";
+import {
+  createPostRequestSchema,
+  postIdParamsSchema,
+  createCommentRequestSchema,
+  listPostsQueryRequestSchema,
+  listCommentsQueryRequestSchema,
+} from "../validations/postValidation";
+
+// Sends a standardized API error payload.
+// Example: sendError(res, 404, "Post not found", "POST_NOT_FOUND")
+const sendError = (
+  res: Response,
+  statusCode: number,
+  message: string,
+  code: string,
+  error?: z.ZodError,
+) => {
+  return res.status(statusCode).json({
+    success: false,
+    message,
+    code,
+    details: error ? z.flattenError(error).fieldErrors : {},
+  });
+};
+
+// Sends a standardized API success payload.
+// Example: sendSuccess(res, 200, "Posts fetched successfully", { items: [] })
+const sendSuccess = <T>(
+  res: Response,
+  statusCode: number,
+  message: string,
+  data?: T,
+) => {
+  return res.status(statusCode).json({
+    success: true,
+    message,
+    data,
+  });
+};
+
+// Normalizes query param values from Express.
+// Example:
+// - "newest" -> "newest"
+// - ["a", "b"] -> "a,b"
+// - undefined -> undefined
+const normalizeQueryString = (value?: any): string | undefined => {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(",");
+  return undefined;
+};
+
+// Ensures request has authenticated user attached by middleware.
+// Example: if token is missing/invalid, returns 401 and null.
+const ensureAuthUser = (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    sendError(res, 401, "Not authorized", "NOT_AUTHORIZED");
+    return null;
+  }
+  return req.user;
+};
+
+// @desc    Get home feed / search / filter posts
+// @route   GET /posts
+// @access  Public
+// Example request:
+// GET /posts?q=react&sortBy=most-upvoted&page=1
+export const getPosts = async (req: Request, res: Response) => {
+  try {
+    const limit = 20;
+    const parsed = listPostsQueryRequestSchema.safeParse({
+      q: normalizeQueryString(req.query.q),
+      sortBy: normalizeQueryString(req.query.sortBy),
+      page: normalizeQueryString(req.query.page) ?? 1,
+    });
+
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid query parameters",
+        "INVALID_QUERY",
+        parsed.error,
+      );
+    }
+
+    const { q, sortBy, page } = parsed.data;
+
+    // Build Mongo query object dynamically based on provided filters.
+    const query: Record<string, any> = {};
+
+    if (q) {
+      // Search keyword against title and description.
+      //i option makes it case-insensitive. For more advanced search, consider MongoDB Atlas Search or a dedicated search engine.
+      // regex queries can be slow on large datasets without proper indexing, so for production consider text indexes or external search solutions.
+      query.$or = [
+        { title: { $regex: q, $options: "i" } },
+        { description: { $regex: q, $options: "i" } },
+      ];
+    }
+
+    const sortCriteria: Record<string, SortOrder> =
+      sortBy === "most-upvoted"
+        ? { upvotesCount: -1, createdAt: -1 }
+        : { createdAt: -1 };
+
+    // Pagination math: page=1,limit=10 -> skip=0; page=2 -> skip=10
+    const skip = (page - 1) * 20;
+
+    const [items, totalItems] = await Promise.all([
+      Post.find(query)
+        .populate("createdBy", "fullName avatar")
+        .sort(sortCriteria)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Post.countDocuments(query),
+    ]);
+
+    // Example response data shape:
+    // { items: [...], pagination: { page: 1, limit: 10, totalItems: 42, totalPages: 5 } }
+    return sendSuccess(res, 200, "Posts fetched successfully", {
+      items,
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit) || 1,
+      },
+    });
+  } catch (error) {
+    return sendError(res, 500, "Failed to fetch posts", "SERVER_ERROR");
+  }
+};
+
+// @desc    Get post details
+// @route   GET /posts/:postId
+// @access  Public
+// Example request: GET /posts/67f0f9d6764d3188ccf29123
+export const getPostById = async (req: Request, res: Response) => {
+  try {
+    const parsed = postIdParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid post id",
+        "INVALID_POST_ID",
+        parsed.error,
+      );
+    }
+
+    const post = await Post.findById(parsed.data.postId)
+      .populate("createdBy", "fullName avatar")
+      .lean();
+
+    if (!post) {
+      return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
+    }
+
+    return sendSuccess(res, 200, "Post fetched successfully", post);
+  } catch (error) {
+    return sendError(res, 500, "Failed to fetch post", "SERVER_ERROR");
+  }
+};
+
+// @desc    Create post
+// @route   POST /posts
+// @access  Verified
+// Example body:
+// { "title": "How to optimize prompts?", "description": "...", "llmName": "OpenAI" }
+export const createPost = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = ensureAuthUser(req, res);
+    if (!user) return;
+
+    const parsed = createPostRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid input data",
+        "INVALID_INPUT",
+        parsed.error,
+      );
+    }
+
+    const post = await Post.create({
+      title: parsed.data.title,
+      description: parsed.data.description,
+      llmName: parsed.data.llmName,
+      createdBy: user._id,
+    });
+
+    const populated = await Post.findById(post._id)
+      .populate("createdBy", "fullName avatar")
+      .lean();
+
+    return sendSuccess(res, 201, "Post created successfully", populated);
+  } catch (error) {
+    return sendError(res, 500, "Failed to create post", "SERVER_ERROR");
+  }
+};
+
+// @desc    Delete own post
+// @route   DELETE /posts/:postId
+// @access  Verified
+// Example request: DELETE /posts/67f0f9d6764d3188ccf29123
+export const deletePost = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = ensureAuthUser(req, res);
+    if (!user) return;
+
+    const parsed = postIdParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid post id",
+        "INVALID_POST_ID",
+        parsed.error,
+      );
+    }
+
+    const post = await Post.findById(parsed.data.postId);
+    if (!post) {
+      return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
+    }
+
+    if (post.createdBy.toString() !== user._id.toString()) {
+      // Ownership check: only the creator can delete.
+      return sendError(
+        res,
+        403,
+        "You can only delete your own posts",
+        "FORBIDDEN",
+      );
+    }
+
+    await Promise.all([
+      // Remove post and related records in parallel for better performance.
+      Post.findByIdAndDelete(post._id),
+      PostComment.deleteMany({ post: post._id }),
+      PostVote.deleteMany({ post: post._id }),
+      User.updateMany({}, { $pull: { savedPosts: post._id } }),
+    ]);
+
+    return sendSuccess(res, 200, "Post deleted successfully", null);
+  } catch (error) {
+    return sendError(res, 500, "Failed to delete post", "SERVER_ERROR");
+  }
+};
+
+const voteOnPost = async (
+  req: AuthRequest,
+  res: Response,
+  voteType: VoteType,
+) => {
+  // Example:
+  // voteType="upvote" on /posts/:postId/upvote
+  // voteType="downvote" on /posts/:postId/downvote
+  const user = ensureAuthUser(req, res);
+  if (!user) return;
+
+  const parsed = postIdParamsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return sendError(
+      res,
+      400,
+      "Invalid post id",
+      "INVALID_POST_ID",
+      parsed.error,
+    );
+  }
+
+  const post = await Post.findById(parsed.data.postId);
+  if (!post) {
+    return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
+  }
+
+  const existingVote = await PostVote.findOne({
+    post: post._id,
+    user: user._id,
+  });
+
+  if (existingVote) {
+    // Switch existing vote type (e.g., downvote -> upvote).
+    existingVote.voteType = voteType;
+    await existingVote.save();
+  } else {
+    // Create first vote by this user on this post.
+    await PostVote.create({
+      post: post._id,
+      user: user._id,
+      voteType,
+    });
+  }
+
+  const [upvotesCount, downvotesCount] = await Promise.all([
+    PostVote.countDocuments({ post: post._id, voteType: "upvote" }),
+    PostVote.countDocuments({ post: post._id, voteType: "downvote" }),
+  ]);
+  post.upvotesCount = upvotesCount;
+  post.downvotesCount = downvotesCount;
+
+  await post.save();
+
+  return sendSuccess(res, 200, `Post ${voteType}d successfully`, null);
+};
+
+// @desc    Upvote post
+// @route   POST /posts/:postId/upvote
+// @access  Verified
+// Example request: POST /posts/67f0f9d6764d3188ccf29123/upvote
+export const upvotePost = async (req: AuthRequest, res: Response) => {
+  try {
+    return await voteOnPost(req, res, "upvote");
+  } catch (error) {
+    return sendError(res, 500, "Failed to upvote post", "SERVER_ERROR");
+  }
+};
+
+// @desc    Downvote post
+// @route   POST /posts/:postId/downvote
+// @access  Verified
+// Example request: POST /posts/67f0f9d6764d3188ccf29123/downvote
+export const downvotePost = async (req: AuthRequest, res: Response) => {
+  try {
+    return await voteOnPost(req, res, "downvote");
+  } catch (error) {
+    return sendError(res, 500, "Failed to downvote post", "SERVER_ERROR");
+  }
+};
+
+// @desc    Remove vote from post
+// @route   DELETE /posts/:postId/vote
+// @access  Verified
+// Example request: DELETE /posts/67f0f9d6764d3188ccf29123/vote
+export const removeVote = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = ensureAuthUser(req, res);
+    if (!user) return;
+
+    const parsed = postIdParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid post id",
+        "INVALID_POST_ID",
+        parsed.error,
+      );
+    }
+
+    const post = await Post.findById(parsed.data.postId);
+    if (!post) {
+      return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
+    }
+
+    await PostVote.deleteOne({ post: post._id, user: user._id });
+
+    const [upvotesCount, downvotesCount] = await Promise.all([
+      PostVote.countDocuments({ post: post._id, voteType: "upvote" }),
+      PostVote.countDocuments({ post: post._id, voteType: "downvote" }),
+    ]);
+    post.upvotesCount = upvotesCount;
+    post.downvotesCount = downvotesCount;
+
+    await post.save();
+
+    return sendSuccess(res, 200, "Vote removed successfully", null);
+  } catch (error) {
+    return sendError(res, 500, "Failed to remove vote", "SERVER_ERROR");
+  }
+};
+
+// @desc    Save post
+// @route   POST /posts/:postId/save
+// @access  Verified
+// Example request: POST /posts/67f0f9d6764d3188ccf29123/save
+export const savePost = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = ensureAuthUser(req, res);
+    if (!user) return;
+
+    const parsed = postIdParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid post id",
+        "INVALID_POST_ID",
+        parsed.error,
+      );
+    }
+
+    const postExists = await Post.exists({ _id: parsed.data.postId });
+    if (!postExists) {
+      return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
+    }
+
+    const alreadySaved = (user.savedPosts || []).some(
+      (id) => id.toString() === parsed.data.postId,
+    );
+
+    if (!alreadySaved) {
+      // Push post ID into user's saved list only once.
+      user.savedPosts = [
+        ...(user.savedPosts || []),
+        new mongoose.Types.ObjectId(parsed.data.postId),
+      ];
+      await user.save();
+    }
+
+    return sendSuccess(res, 200, "Post saved successfully", null);
+  } catch (error) {
+    return sendError(res, 500, "Failed to save post", "SERVER_ERROR");
+  }
+};
+
+// @desc    Unsave post
+// @route   DELETE /posts/:postId/save
+// @access  Verified
+// Example request: DELETE /posts/67f0f9d6764d3188ccf29123/save
+export const unsavePost = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = ensureAuthUser(req, res);
+    if (!user) return;
+
+    const parsed = postIdParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid post id",
+        "INVALID_POST_ID",
+        parsed.error,
+      );
+    }
+
+    user.savedPosts = (user.savedPosts || []).filter(
+      (id) => id.toString() !== parsed.data.postId,
+    );
+    await user.save();
+
+    return sendSuccess(res, 200, "Post unsaved successfully", null);
+  } catch (error) {
+    return sendError(res, 500, "Failed to unsave post", "SERVER_ERROR");
+  }
+};
+
+// @desc    Add comment to a post
+// @route   POST /posts/:postId/comments
+// @access  Verified
+// Example body: { "content": "This explanation helped a lot." }
+export const addComment = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = ensureAuthUser(req, res);
+    if (!user) return;
+
+    const paramsParsed = postIdParamsSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid post id",
+        "INVALID_POST_ID",
+        paramsParsed.error,
+      );
+    }
+
+    const bodyParsed = createCommentRequestSchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid input data",
+        "INVALID_INPUT",
+        bodyParsed.error,
+      );
+    }
+
+    const post = await Post.findById(paramsParsed.data.postId);
+    if (!post) {
+      return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
+    }
+
+    const created = await PostComment.create({
+      post: post._id,
+      user: user._id,
+      content: bodyParsed.data.content,
+    });
+
+    // Keep denormalized counter updated for fast post list rendering.
+    post.commentsCount += 1;
+    await post.save();
+
+    const comment = await PostComment.findById(created._id)
+      .populate("user", "fullName avatar")
+      .lean();
+
+    return sendSuccess(res, 201, "Comment added successfully", comment);
+  } catch (error) {
+    return sendError(res, 500, "Failed to add comment", "SERVER_ERROR");
+  }
+};
+
+// @desc    Get comments for post (chat-like timeline)
+// @route   GET /posts/:postId/comments
+// @access  Public
+// Example request: GET /posts/:postId/comments?order=oldest&page=1&limit=20
+export const getComments = async (req: Request, res: Response) => {
+  try {
+    const limit = 30;
+    const paramsParsed = postIdParamsSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid post id",
+        "INVALID_POST_ID",
+        paramsParsed.error,
+      );
+    }
+
+    const queryParsed = listCommentsQueryRequestSchema.safeParse({
+      order: normalizeQueryString(req.query.order),
+      page: normalizeQueryString(req.query.page) ?? 1,
+    });
+
+    if (!queryParsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid query parameters",
+        "INVALID_QUERY",
+        queryParsed.error,
+      );
+    }
+
+    const postExists = await Post.exists({ _id: paramsParsed.data.postId });
+    if (!postExists) {
+      return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
+    }
+
+    const { page, order } = queryParsed.data;
+    const skip = (page - 1) * limit;
+    const sortOrder = order === "newest" ? -1 : 1;
+
+    const [items, totalItems] = await Promise.all([
+      PostComment.find({ post: paramsParsed.data.postId })
+        .sort({ createdAt: sortOrder })
+        .skip(skip)
+        .limit(limit)
+        .populate("user", "fullName avatar")
+        .lean(),
+      PostComment.countDocuments({ post: paramsParsed.data.postId }),
+    ]);
+
+    return sendSuccess(res, 200, "Comments fetched successfully", {
+      items,
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit) || 1,
+      },
+    });
+  } catch (error) {
+    return sendError(res, 500, "Failed to fetch comments", "SERVER_ERROR");
+  }
+};
