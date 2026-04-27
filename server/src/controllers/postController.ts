@@ -12,6 +12,7 @@ import {
   createCommentRequestSchema,
   listPostsQueryRequestSchema,
   listCommentsQueryRequestSchema,
+  updatePostRequestSchema,
 } from "../validations/postValidation";
 
 // Sends a standardized API error payload.
@@ -69,10 +70,10 @@ const ensureAuthUser = (req: AuthRequest, res: Response) => {
 
 // @desc    Get home feed / search / filter posts
 // @route   GET /posts
-// @access  Public
+// @access  Public (enriched with viewer flags when authenticated)
 // Example request:
 // GET /posts?q=react&sortBy=most-upvoted&page=1
-export const getPosts = async (req: Request, res: Response) => {
+export const getPosts = async (req: AuthRequest, res: Response) => {
   try {
     const limit = 20;
     const parsed = listPostsQueryRequestSchema.safeParse({
@@ -116,7 +117,7 @@ export const getPosts = async (req: Request, res: Response) => {
 
     const [items, totalItems] = await Promise.all([
       Post.find(query)
-        .populate("createdBy", "fullName avatar")
+        .populate("createdBy", "fullName email")
         .sort(sortCriteria)
         .skip(skip)
         .limit(limit)
@@ -124,10 +125,51 @@ export const getPosts = async (req: Request, res: Response) => {
       Post.countDocuments(query),
     ]);
 
+    let enrichedItems = items.map((post) => ({
+      ...post,
+      viewer: {
+        isSaved: false,
+        userVote: null as VoteType | null,
+        isCreatedByViewer: false,
+      },
+    }));
+
+    if (req.user && items.length > 0) {
+      const postIds = items.map((item) => item._id);
+
+      const userVotes = await PostVote.find({
+        user: req.user._id,
+        post: { $in: postIds },
+      })
+        .select("post voteType")
+        .lean();
+
+      const voteByPostId = new Map<string, VoteType>();
+      userVotes.forEach((vote) => {
+        voteByPostId.set(vote.post.toString(), vote.voteType);
+      });
+
+      const savedPostIds = new Set(
+        (req.user.savedPosts || []).map((id) => id.toString()),
+      );
+
+      enrichedItems = items.map((post) => {
+        const postId = post._id.toString();
+        return {
+          ...post,
+          viewer: {
+            isSaved: savedPostIds.has(postId),
+            userVote: voteByPostId.get(postId) ?? null,
+            isCreatedByViewer: post.createdBy._id.toString() === req.user!._id.toString(),
+          },
+        };
+      });
+    }
+
     // Example response data shape:
     // { items: [...], pagination: { page: 1, limit: 10, totalItems: 42, totalPages: 5 } }
     return sendSuccess(res, 200, "Posts fetched successfully", {
-      items,
+      items: enrichedItems,
       pagination: {
         page,
         limit,
@@ -140,11 +182,159 @@ export const getPosts = async (req: Request, res: Response) => {
   }
 };
 
+// @desc    Get user's library posts
+// @route   GET /posts/library
+// @access  Authenticated
+// Example request: GET /posts/library?filter=saved&page=1&sortBy=newest
+export const getLibraryPosts = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = ensureAuthUser(req, res);
+    if (!user) return;
+
+    const limit = 20;
+    const libraryQuerySchema = z
+      .object({
+        q: z.string().trim().optional(),
+        sortBy: z.enum(["newest", "most-upvoted"]).default("newest"),
+        page: z.coerce.number().int().min(1).default(1),
+        filter: z
+          .enum(["all", "created", "liked", "commented", "saved"])
+          .default("all"),
+      })
+      .strict();
+
+    const parsed = libraryQuerySchema.safeParse({
+      q: normalizeQueryString(req.query.q),
+      sortBy: normalizeQueryString(req.query.sortBy),
+      page: normalizeQueryString(req.query.page) ?? 1,
+      filter: normalizeQueryString(req.query.filter),
+    });
+
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid query parameters",
+        "INVALID_QUERY",
+        parsed.error,
+      );
+    }
+
+    const { q, sortBy, page, filter } = parsed.data;
+
+    const [createdIdsRaw, likedIdsRaw, commentedIdsRaw] = await Promise.all([
+      Post.find({ createdBy: user._id }).select("_id").lean(),
+      PostVote.find({ user: user._id, voteType: "upvote" }).distinct("post"),
+      PostComment.find({ user: user._id }).distinct("post"),
+    ]);
+
+    const createdIds = createdIdsRaw.map((item) => item._id.toString());
+    const likedIds = likedIdsRaw.map((id) => id.toString());
+    const commentedIds = commentedIdsRaw.map((id) => id.toString());
+    const savedIds = (user.savedPosts || []).map((id) => id.toString());
+
+    let filterIds: string[] = [];
+    if (filter === "created") {
+      filterIds = createdIds;
+    } else if (filter === "liked") {
+      filterIds = likedIds;
+    } else if (filter === "commented") {
+      filterIds = commentedIds;
+    } else if (filter === "saved") {
+      filterIds = savedIds;
+    } else {
+      filterIds = Array.from(
+        new Set([...createdIds, ...likedIds, ...commentedIds, ...savedIds]),
+      );
+    }
+
+    if (filterIds.length === 0) {
+      return sendSuccess(res, 200, "Library posts fetched successfully", {
+        items: [],
+        pagination: {
+          page,
+          limit,
+          totalItems: 0,
+          totalPages: 1,
+        },
+      });
+    }
+
+    const query: Record<string, any> = {
+      _id: { $in: filterIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    };
+
+    if (q) {
+      query.$or = [
+        { title: { $regex: q, $options: "i" } },
+        { description: { $regex: q, $options: "i" } },
+      ];
+    }
+
+    const sortCriteria: Record<string, SortOrder> =
+      sortBy === "most-upvoted"
+        ? { upvotesCount: -1, createdAt: -1 }
+        : { createdAt: -1 };
+
+    const skip = (page - 1) * limit;
+
+    const [items, totalItems] = await Promise.all([
+      Post.find(query)
+        .populate("createdBy", "fullName email")
+        .sort(sortCriteria)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Post.countDocuments(query),
+    ]);
+
+    const postIds = items.map((item) => item._id);
+    const userVotes = await PostVote.find({
+      user: user._id,
+      post: { $in: postIds },
+    })
+      .select("post voteType")
+      .lean();
+
+    const voteByPostId = new Map<string, VoteType>();
+    userVotes.forEach((vote) => {
+      voteByPostId.set(vote.post.toString(), vote.voteType);
+    });
+
+    const savedPostIds = new Set(savedIds);
+
+    const enrichedItems = items.map((post) => {
+      const postId = post._id.toString();
+      return {
+        ...post,
+        viewer: {
+          isSaved: savedPostIds.has(postId),
+          userVote: voteByPostId.get(postId) ?? null,
+          isCreatedByViewer:
+            post.createdBy._id.toString() === user._id.toString(),
+        },
+      };
+    });
+
+    return sendSuccess(res, 200, "Library posts fetched successfully", {
+      items: enrichedItems,
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit) || 1,
+      },
+    });
+  } catch (error) {
+    return sendError(res, 500, "Failed to fetch library posts", "SERVER_ERROR");
+  }
+};
+
 // @desc    Get post details
 // @route   GET /posts/:postId
-// @access  Public
+// @access  Public (enriched with viewer flags when authenticated)
 // Example request: GET /posts/67f0f9d6764d3188ccf29123
-export const getPostById = async (req: Request, res: Response) => {
+export const getPostById = async (req: AuthRequest, res: Response) => {
   try {
     const parsed = postIdParamsSchema.safeParse(req.params);
     if (!parsed.success) {
@@ -158,16 +348,116 @@ export const getPostById = async (req: Request, res: Response) => {
     }
 
     const post = await Post.findById(parsed.data.postId)
-      .populate("createdBy", "fullName avatar")
+      .populate("createdBy", "fullName email")
       .lean();
 
     if (!post) {
       return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
     }
 
-    return sendSuccess(res, 200, "Post fetched successfully", post);
+    if (!req.user) {
+      return sendSuccess(res, 200, "Post fetched successfully", {
+        ...post,
+        viewer: {
+          isSaved: false,
+          userVote: null as VoteType | null,
+          isCreatedByViewer: false,
+        },
+      });
+    }
+
+    const [userVote] = await Promise.all([
+      PostVote.findOne({ post: post._id, user: req.user._id })
+        .select("voteType")
+        .lean(),
+    ]);
+
+    const savedPostIds = new Set(
+      (req.user.savedPosts || []).map((id) => id.toString()),
+    );
+
+    return sendSuccess(res, 200, "Post fetched successfully", {
+      ...post,
+      viewer: {
+        isSaved: savedPostIds.has(post._id.toString()),
+        userVote: userVote?.voteType ?? null,
+        isCreatedByViewer: post.createdBy._id.toString() === req.user._id.toString(),
+      },
+    });
   } catch (error) {
     return sendError(res, 500, "Failed to fetch post", "SERVER_ERROR");
+  }
+};
+
+// @desc    Update own post
+// @route   PATCH /posts/:postId
+// @access  Verified
+export const updatePost = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = ensureAuthUser(req, res);
+    if (!user) return;
+
+    const paramsParsed = postIdParamsSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid post id",
+        "INVALID_POST_ID",
+        paramsParsed.error,
+      );
+    }
+
+    const bodyParsed = updatePostRequestSchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid input data",
+        "INVALID_INPUT",
+        bodyParsed.error,
+      );
+    }
+
+    const post = await Post.findById(paramsParsed.data.postId);
+    if (!post) {
+      return sendError(res, 404, "Post not found", "POST_NOT_FOUND");
+    }
+
+    if (post.createdBy.toString() !== user._id.toString()) {
+      return sendError(
+        res,
+        403,
+        "You can only edit your own posts",
+        "FORBIDDEN",
+      );
+    }
+
+    if (bodyParsed.data.title !== undefined) {
+      post.title = bodyParsed.data.title;
+    }
+    if (bodyParsed.data.description !== undefined) {
+      post.description = bodyParsed.data.description;
+    }
+    if (bodyParsed.data.subject !== undefined) {
+      post.subject = bodyParsed.data.subject;
+    }
+    if (bodyParsed.data.llmName !== undefined) {
+      post.llmName = bodyParsed.data.llmName;
+    }
+    if (bodyParsed.data.chatLink !== undefined) {
+      post.chatLink = bodyParsed.data.chatLink;
+    }
+
+    await post.save();
+
+    const updated = await Post.findById(post._id)
+      .populate("createdBy", "fullName email")
+      .lean();
+
+    return sendSuccess(res, 200, "Post updated successfully", updated);
+  } catch (error) {
+    return sendError(res, 500, "Failed to update post", "SERVER_ERROR");
   }
 };
 
@@ -195,7 +485,9 @@ export const createPost = async (req: AuthRequest, res: Response) => {
     const post = await Post.create({
       title: parsed.data.title,
       description: parsed.data.description,
+      subject: parsed.data.subject?.trim() || "General",
       llmName: parsed.data.llmName,
+      chatLink: parsed.data.chatLink,
       createdBy: user._id,
     });
 

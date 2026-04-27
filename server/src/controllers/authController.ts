@@ -10,6 +10,9 @@ import {
   resendVerificationSchema,
   updateNameSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordParamsSchema,
+  resetPasswordSchema,
   jwt_payload_schema,
 } from "../validations/authValidation";
 import { AuthRequest } from "../middleware/authMiddleware";
@@ -57,10 +60,23 @@ const getJwtSecret = () => {
   return secret;
 };
 
+const buildClientUrl = (req: Request) => {
+  const configuredClientUrl =
+    process.env.PUBLIC_CLIENT_URL?.trim() ||
+    process.env.PUBLIC_FRONTEND_URL?.trim() ||
+    process.env.CLIENT_URL?.trim();
+
+  return configuredClientUrl || `${req.protocol}://${req.get("origin")}`;
+};
+
 const buildVerificationUrl = (req: Request, rawToken: string) => {
-  const configuredBaseUrl = process.env.PUBLIC_API_URL?.trim();
-  const baseUrl = configuredBaseUrl || `${req.protocol}://${req.get("host")}`;
-  return `${baseUrl}/auth/verify-email/${rawToken}`;
+  const baseUrl = buildClientUrl(req);
+  return `${baseUrl}/verify-email/${rawToken}`;
+};
+
+const buildResetPasswordUrl = (req: Request, rawToken: string) => {
+  const baseUrl = buildClientUrl(req);
+  return `${baseUrl}/reset-password/${rawToken}`;
 };
 
 const generateToken = (payload: z.infer<typeof jwt_payload_schema>) => {
@@ -182,15 +198,6 @@ export const loginUser = async (req: Request, res: Response) => {
 
     // If valid credentials and user exists, check if email is verified before sending token
     if (isMatch && user) {
-      // Check if email is verified
-      if (!user.isVerified) {
-        return sendError(
-          res,
-          403,
-          "Email not verified. Please check your inbox.",
-          "EMAIL_NOT_VERIFIED",
-        );
-      }
       // Generate JWT token and send user data
       sendSuccess(res, 200, "Login successful", {
         _id: user._id,
@@ -348,6 +355,147 @@ export const resendVerification = async (req: Request, res: Response) => {
       res,
       500,
       "An error occurred while resending verification link",
+      "SERVER_ERROR",
+    );
+  }
+};
+
+// @desc    Request password reset link
+// @route   POST /auth/forgot-password
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const parsed = forgotPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid input data",
+        "INVALID_INPUT",
+        parsed.error,
+      );
+    }
+
+    const { email } = parsed.data;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return sendSuccess(
+        res,
+        200,
+        "If the account exists, a password reset link will be sent shortly.",
+        null,
+      );
+    }
+
+    const rawToken = crypto.randomBytes(20).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordTokenExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    const resetPasswordUrl = buildResetPasswordUrl(req, rawToken);
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: "StudyFAST - Reset your password",
+        fullName: user.fullName,
+        resetPasswordUrl,
+      });
+
+      return sendSuccess(
+        res,
+        200,
+        "If the account exists, a password reset link will be sent shortly.",
+        null,
+      );
+    } catch (error) {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordTokenExpires = undefined;
+      await user.save();
+
+      return sendError(
+        res,
+        500,
+        "Could not send password reset email. Please try again.",
+        "EMAIL_SEND_ERROR",
+      );
+    }
+  } catch (error: any) {
+    return sendError(
+      res,
+      500,
+      "An error occurred while processing the password reset request",
+      "SERVER_ERROR",
+    );
+  }
+};
+
+// @desc    Reset password using token
+// @route   POST /auth/reset-password/:token
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const paramsResult = resetPasswordParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid reset token",
+        "INVALID_TOKEN",
+        paramsResult.error,
+      );
+    }
+
+    const bodyResult = resetPasswordSchema.safeParse(req.body);
+    if (!bodyResult.success) {
+      return sendError(
+        res,
+        400,
+        "Invalid input data",
+        "INVALID_INPUT",
+        bodyResult.error,
+      );
+    }
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(paramsResult.data.token)
+      .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordTokenExpires: { $gt: Date.now() },
+    }).select("+password");
+
+    if (!user) {
+      return sendError(
+        res,
+        400,
+        "Invalid or expired reset token",
+        "INVALID_OR_EXPIRED_TOKEN",
+      );
+    }
+
+    user.password = bodyResult.data.password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordTokenExpires = undefined;
+    await user.save();
+
+    return sendSuccess(
+      res,
+      200,
+      "Password reset successful. You can now log in.",
+      null,
+    );
+  } catch (error: any) {
+    return sendError(
+      res,
+      500,
+      "An error occurred while resetting the password",
       "SERVER_ERROR",
     );
   }

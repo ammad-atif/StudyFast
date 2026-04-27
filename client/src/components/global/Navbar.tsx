@@ -1,10 +1,15 @@
 import { Link, useLocation } from "react-router-dom";
 import { GraduationCap, Share2, Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useAppSelector } from "../../store";
+import { getAvatarUrl } from "../../utils/avatar";
 
 export const Navbar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+  const user = useAppSelector((state) => state.auth.user);
+  const avatarSrc = getAvatarUrl(user?.fullName || user?.email || "default");
   const onClose = () => {
     setIsOpen(false);
   };
@@ -16,20 +21,16 @@ export const Navbar = () => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
     }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
 
   const navLinks = [
     { name: "Home", path: "/" },
-    { name: "Library", path: "/library" },
-    { name: "Signup", path: "/sign-up" },
-    { name: "Signin", path: "/sign-in" },
-    { name: "Reset Password", path: "/reset-pass" },
-    { name: "Forgot Password", path: "/forgot-pass" },
-    { name: "Verify Email", path: "/verify-email" },
-    { name: "Posts", path: "/posts/1" },
+    ...(isAuthenticated ? [{ name: "Library", path: "/library" }] : []),
   ];
 
   return (
@@ -69,22 +70,36 @@ export const Navbar = () => {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-4">
-              <button className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-800 transition-all active:scale-95 cursor-pointer">
-                <Share2 size={16} />
-                Share AI Chat
-              </button>
 
-              <Link
-                to="/profile"
-                className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border border-slate-200 hover:ring-2 hover:ring-primary/10 transition-all"
-              >
-                <img
-                  alt="User Profile"
-                  className="w-full h-full object-cover"
-                  src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
-                />
-              </Link>
+            <div className="flex items-center gap-4">
+              {isAuthenticated && (
+                <Link to={"/create-post"}>
+                  <button className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-800 transition-all active:scale-95 cursor-pointer">
+                    <Share2 size={16} />
+                    Share AI Chat
+                  </button>
+                </Link>
+              )}
+
+              {isAuthenticated ? (
+                <Link
+                  to="/profile"
+                  className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border border-slate-200 hover:ring-2 hover:ring-primary/10 transition-all"
+                >
+                  <img
+                    alt="User Profile"
+                    className="w-full h-full object-cover"
+                    src={avatarSrc}
+                  />
+                </Link>
+              ) : (
+                <Link
+                  to="/sign-in"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-primary text-primary hover:bg-primary hover:text-white transition-all"
+                >
+                  Sign In
+                </Link>
+              )}
             </div>
           </div>
 
@@ -95,9 +110,7 @@ export const Navbar = () => {
         </div>
       </nav>
 
-      {/* Mobile Drawer */}
-
-      {/* Drawer Panel */}
+      {/* Drawer Panel for mobile*/}
       <aside
         className={`fixed inset-0 bg-white z-50 shadow-2xl flex flex-col transition-transform duration-300 scroll-none ${
           isOpen ? "translate-x-0" : "-translate-x-full"
@@ -143,27 +156,41 @@ export const Navbar = () => {
 
         {/* Footer */}
         <div className="px-4 py-3 border-t space-y-3 flex flex-col items-center">
-          <button className="w-full flex items-center justify-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-800 transition-all active:scale-95">
-            <Share2 size={16} />
-            Share AI Chat
-          </button>
+          {isAuthenticated && (
+            <Link to={"/create-post"}>
+              <button className="w-full flex items-center justify-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-800 transition-all active:scale-95">
+                <Share2 size={16} />
+                Share AI Chat
+              </button>
+            </Link>
+          )}
 
-          <Link
-            to="/profile"
-            onClick={onClose}
-            className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <div className="w-9 h-9 rounded-full bg-slate-200 overflow-hidden border border-slate-200">
-              <img
-                alt="User Profile"
-                className="w-full h-full object-cover"
-                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
-              />
-            </div>
-            <span className="text-sm font-medium text-slate-700">
-              View profile
-            </span>
-          </Link>
+          {isAuthenticated ? (
+            <Link
+              to="/profile"
+              onClick={onClose}
+              className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-full bg-slate-200 overflow-hidden border border-slate-200">
+                <img
+                  alt="User Profile"
+                  className="w-full h-full object-cover"
+                  src={avatarSrc}
+                />
+              </div>
+              <span className="text-sm font-medium text-slate-700">
+                View profile
+              </span>
+            </Link>
+          ) : (
+            <Link
+              to="/sign-in"
+              onClick={onClose}
+              className="w-full text-center px-4 py-2.5 rounded-lg text-sm font-semibold border border-primary text-primary hover:bg-primary hover:text-white transition-all"
+            >
+              Sign In
+            </Link>
+          )}
         </div>
       </aside>
     </>

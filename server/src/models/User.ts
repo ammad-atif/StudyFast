@@ -10,6 +10,8 @@ export interface IUser extends Document {
   savedPosts: mongoose.Types.ObjectId[];
   verificationToken?: string;
   verificationTokenExpires?: Date;
+  resetPasswordToken?: string;
+  resetPasswordTokenExpires?: Date;
   comparePassword(enteredPassword: string): Promise<boolean>;
 }
 
@@ -51,6 +53,12 @@ const userSchema = new Schema<IUser>(
       type: String,
     },
     verificationTokenExpires: {
+      type: Date,
+    },
+    resetPasswordToken: {
+      type: String,
+    },
+    resetPasswordTokenExpires: {
       type: Date,
     },
   },

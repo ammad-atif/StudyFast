@@ -11,6 +11,7 @@ import {
   postDetailsSuccessResponseSchema,
   postIdParamsSchema,
   postListSuccessResponseSchema,
+  updatePostRequestSchema,
 } from "../validations/postValidation";
 
 export const postsOpenApiDocument = createDocument({
@@ -34,7 +35,11 @@ export const postsOpenApiDocument = createDocument({
     "/posts": {
       get: {
         tags: ["Posts"],
-        summary: "Get posts feed with search, filter, sort, and pagination",
+        summary:
+          "Get posts feed with search, filter, sort, pagination, and optional viewer relations",
+        description:
+          "Public endpoint. When Authorization: Bearer <token> is sent, each post item includes viewer.isSaved and viewer.userVote.",
+        security: [{ BearerAuth: [] }, {}],
         requestParams: {
           query: listPostsQueryRequestSchema,
         },
@@ -108,7 +113,10 @@ export const postsOpenApiDocument = createDocument({
     "/posts/{postId}": {
       get: {
         tags: ["Posts"],
-        summary: "Get post details",
+        summary: "Get post details with optional viewer relations",
+        description:
+          "Public endpoint. When Authorization: Bearer <token> is sent, response includes viewer relation data.",
+        security: [{ BearerAuth: [] }, {}],
         requestParams: {
           path: postIdParamsSchema,
         },
@@ -123,6 +131,40 @@ export const postsOpenApiDocument = createDocument({
           },
           "404": {
             description: "Post not found",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+        },
+      },
+      patch: {
+        tags: ["Posts"],
+        summary: "Edit own post (verified users only)",
+        security: [{ BearerAuth: [] }],
+        requestParams: {
+          path: postIdParamsSchema,
+        },
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: updatePostRequestSchema,
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Post updated",
+            content: {
+              "application/json": {
+                schema: postDetailsSuccessResponseSchema,
+              },
+            },
+          },
+          "403": {
+            description: "Forbidden",
             content: {
               "application/json": {
                 schema: apiErrorSchema,

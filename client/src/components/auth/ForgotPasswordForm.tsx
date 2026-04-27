@@ -6,6 +6,9 @@ import { Input } from "../global/Input";
 import { Button } from "./Button";
 import { Mail, ArrowLeft, Send } from "lucide-react";
 import { Card } from "../global/Card";
+import { useMutation } from "@tanstack/react-query";
+import { api } from "../../api";
+import { useState } from "react";
 
 const forgotSchema = z.object({
   email: z.string().email("Please enter a valid university email"),
@@ -13,7 +16,16 @@ const forgotSchema = z.object({
 
 type ForgotFormData = z.infer<typeof forgotSchema>;
 
+type ApiResponse = {
+  message?: string;
+};
+
+type ApiErrorShape = {
+  message?: string;
+};
+
 export const ForgotPasswordForm = () => {
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -24,8 +36,27 @@ export const ForgotPasswordForm = () => {
     reValidateMode: "onChange",
   });
 
-  const onSubmit = (data: ForgotFormData) => {
-    console.log("Recovery email sent to:", data.email);
+  const forgotPasswordMutation = useMutation<
+    ApiResponse,
+    ApiErrorShape,
+    ForgotFormData
+  >({
+    mutationFn: async (payload) =>
+      api.post("/auth/forgot-password", { email: payload.email }),
+    onSuccess: (response) => {
+      setSuccessMessage(
+        response?.message ||
+          "If the account exists, a password reset link has been sent.",
+      );
+    },
+    onError: (error) => {
+      alert(error?.message || "Could not send reset link.");
+    },
+  });
+
+  const onSubmit = async (data: ForgotFormData) => {
+    setSuccessMessage(null);
+    await forgotPasswordMutation.mutateAsync(data);
   };
 
   return (
@@ -37,6 +68,12 @@ export const ForgotPasswordForm = () => {
         description="Enter your email and we'll send you instructions to reset your password."
       ></Card>
 
+      {successMessage && (
+        <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
+          {successMessage}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         <Input
           label="Email Address"
@@ -47,9 +84,17 @@ export const ForgotPasswordForm = () => {
           {...register("email")}
         />
 
-        <Button disabled={isSubmitting} variant="primary" type="submit">
-          {isSubmitting ? "Sending..." : "Send Reset Link"}
-          {!isSubmitting && <Send size={18} />}
+        <Button
+          disabled={isSubmitting || forgotPasswordMutation.isPending}
+          variant="primary"
+          type="submit"
+        >
+          {isSubmitting || forgotPasswordMutation.isPending
+            ? "Sending..."
+            : "Send Reset Link"}
+          {!(isSubmitting || forgotPasswordMutation.isPending) && (
+            <Send size={18} />
+          )}
         </Button>
       </form>
 

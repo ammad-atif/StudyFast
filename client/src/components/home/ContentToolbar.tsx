@@ -1,24 +1,40 @@
 import { Input } from "../global/Input";
-import React from "react";
-export function ContentToolbar() {
-  const filters: { name: string; active: boolean }[] = [
-    { name: "Relevance", active: true },
-    { name: "Popular", active: false },
-    { name: "Newest", active: false },
+type SortBy = "newest" | "most-upvoted";
+
+type ContentToolbarProps = {
+  searchQuery: string;
+  onSearchQueryChange: (value: string) => void;
+  onSearchSubmit: () => void;
+  selectedSort: SortBy;
+  onSelectedSortChange: (value: SortBy) => void;
+};
+
+export function ContentToolbar({
+  searchQuery,
+  onSearchQueryChange,
+  onSearchSubmit,
+  selectedSort,
+  onSelectedSortChange,
+}: ContentToolbarProps) {
+  const filters: { name: string; value: SortBy }[] = [
+    { name: "Popular", value: "most-upvoted" },
+    { name: "Newest", value: "newest" },
   ];
-
-  const [selectedFilter, setSelectedFilter] =
-    React.useState<string>("relevance");
-
-  const handleFilterClick = (filterName: string) => {
-    setSelectedFilter(filterName);
-  };
 
   return (
     <>
       <div className="mb-6">
         <div className="relative w-full">
-          <Input placeholder="Search your notes..." />
+          <Input
+            placeholder="Search your notes..."
+            value={searchQuery}
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                onSearchSubmit();
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -27,8 +43,8 @@ export function ContentToolbar() {
         {filters.map((filter) => (
           <button
             key={filter.name}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all cursor-pointer ${selectedFilter === filter.name.toLowerCase() ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-50"}`}
-            onClick={() => handleFilterClick(filter.name.toLowerCase())}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all cursor-pointer ${selectedSort === filter.value ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-50"}`}
+            onClick={() => onSelectedSortChange(filter.value)}
           >
             {filter.name}
           </button>

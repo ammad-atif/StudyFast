@@ -8,6 +8,9 @@ import {
   resendVerificationSchema,
   updateNameSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordParamsSchema,
+  resetPasswordSchema,
   registerSuccessSchema,
   loginSuccessSchema,
   messageOnlySuccessSchema,
@@ -24,6 +27,7 @@ import {
   postDetailsSuccessResponseSchema,
   postIdParamsSchema,
   postListSuccessResponseSchema,
+  updatePostRequestSchema,
 } from "../validations/postValidation";
 
 export const mergedOpenApiDocument = createDocument({
@@ -149,14 +153,6 @@ export const mergedOpenApiDocument = createDocument({
               },
             },
           },
-          "403": {
-            description: "Email not verified",
-            content: {
-              "application/json": {
-                schema: apiErrorSchema,
-              },
-            },
-          },
           "500": {
             description: "Server error",
             content: {
@@ -226,6 +222,89 @@ export const mergedOpenApiDocument = createDocument({
           },
           "400": {
             description: "Invalid input",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+          "500": {
+            description: "Server error",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+        },
+      },
+    },
+    "/auth/forgot-password": {
+      post: {
+        tags: ["Auth"],
+        summary: "Request a password reset link",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: forgotPasswordSchema,
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Reset link request accepted",
+            content: {
+              "application/json": {
+                schema: messageOnlySuccessSchema,
+              },
+            },
+          },
+          "400": {
+            description: "Invalid input",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+          "500": {
+            description: "Server error",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+        },
+      },
+    },
+    "/auth/reset-password/{token}": {
+      post: {
+        tags: ["Auth"],
+        summary: "Reset password with token",
+        requestParams: {
+          path: resetPasswordParamsSchema,
+        },
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: resetPasswordSchema,
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Password reset",
+            content: {
+              "application/json": {
+                schema: messageOnlySuccessSchema,
+              },
+            },
+          },
+          "400": {
+            description: "Invalid token or input",
             content: {
               "application/json": {
                 schema: apiErrorSchema,
@@ -360,7 +439,11 @@ export const mergedOpenApiDocument = createDocument({
     "/posts": {
       get: {
         tags: ["Posts"],
-        summary: "Get posts feed with search, filter, sort, and pagination",
+        summary:
+          "Get posts feed with search, filter, sort, pagination, and optional viewer relations",
+        description:
+          "Public endpoint. When Authorization: Bearer <token> is sent, each post item includes viewer.isSaved and viewer.userVote.",
+        security: [{ BearerAuth: [] }, {}],
         requestParams: {
           query: listPostsQueryRequestSchema,
         },
@@ -434,7 +517,10 @@ export const mergedOpenApiDocument = createDocument({
     "/posts/{postId}": {
       get: {
         tags: ["Posts"],
-        summary: "Get post details",
+        summary: "Get post details with optional viewer relations",
+        description:
+          "Public endpoint. When Authorization: Bearer <token> is sent, response includes viewer relation data.",
+        security: [{ BearerAuth: [] }, {}],
         requestParams: {
           path: postIdParamsSchema,
         },
@@ -449,6 +535,40 @@ export const mergedOpenApiDocument = createDocument({
           },
           "404": {
             description: "Post not found",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+        },
+      },
+      patch: {
+        tags: ["Posts"],
+        summary: "Edit own post (verified users only)",
+        security: [{ BearerAuth: [] }],
+        requestParams: {
+          path: postIdParamsSchema,
+        },
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: updatePostRequestSchema,
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Post updated",
+            content: {
+              "application/json": {
+                schema: postDetailsSuccessResponseSchema,
+              },
+            },
+          },
+          "403": {
+            description: "Forbidden",
             content: {
               "application/json": {
                 schema: apiErrorSchema,

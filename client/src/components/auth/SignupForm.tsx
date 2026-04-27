@@ -2,10 +2,14 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Input } from "../global/Input";
-import { User, Mail, Lock, ShieldCheck, Building2 } from "lucide-react";
+import { User, Mail, Lock, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card } from "../global/Card";
 import { Button } from "./Button";
+import { api } from "../../api";
+import { useMutation } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+
 const signupSchema = z
   .object({
     fullName: z
@@ -39,7 +43,16 @@ const signupSchema = z
 
 type SignupFormData = z.infer<typeof signupSchema>;
 
+type RegisterResponse = {
+  message?: string;
+};
+
+type ApiErrorShape = {
+  message?: string;
+};
+
 export const SignupForm = () => {
+  const navigate = useNavigate();
   const {
     register,
     handleSubmit,
@@ -50,9 +63,37 @@ export const SignupForm = () => {
     reValidateMode: "onChange",
   });
 
+  const signupMutation = useMutation<
+    RegisterResponse,
+    ApiErrorShape,
+    {
+      fullName: string;
+      email: string;
+      password: string;
+    }
+  >({
+    // Use the shared axios instance so request/response interceptors are applied.
+    mutationFn: async (payload) => api.post("/auth/register", payload),
+    onSuccess: (response) => {
+      alert(response?.message);
+      // Optionally, you could redirect to sign-in or clear the form here.
+      setTimeout(() => {
+        navigate("/sign-in");
+      }, 3000);
+    },
+    onError: (error) => {
+      // Interceptor normalizes the error object, so message is safe to surface.
+      alert(error?.message);
+    },
+  });
+
   const onSubmit = async (data: SignupFormData) => {
-    // This will integrate with your Auth Service/Redux later
-    console.log("Form Data:", data);
+    await signupMutation.mutateAsync({
+      fullName: data.fullName,
+      // Backend register accepts a single `email` field.
+      email: data.personalEmail,
+      password: data.password,
+    });
   };
 
   return (
@@ -73,22 +114,24 @@ export const SignupForm = () => {
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
+          {/* <Input
             label="University Email"
             icon={<Building2 className="w-4 h-4 text-slate-blue" />}
             placeholder="name@university.edu"
             type="email"
             error={errors.universityEmail?.message}
             {...register("universityEmail")}
-          />
-          <Input
-            label="Personal Email"
-            icon={<Mail className="w-4 h-4 text-slate-blue" />}
-            placeholder="name@example.com"
-            type="email"
-            error={errors.personalEmail?.message}
-            {...register("personalEmail")}
-          />
+          /> */}
+          <div className="col-span-1 md:col-span-2">
+            <Input
+              label="Personal Email"
+              icon={<Mail className="w-4 h-4 text-slate-blue" />}
+              placeholder="name@example.com"
+              type="email"
+              error={errors.personalEmail?.message}
+              {...register("personalEmail")}
+            />
+          </div>
         </div>
 
         <Input
@@ -110,8 +153,14 @@ export const SignupForm = () => {
         />
 
         {/* Primary Action Button */}
-        <Button disabled={isSubmitting} type="submit" variant="primary">
-          {isSubmitting ? "Creating Account..." : "Register Now"}
+        <Button
+          disabled={isSubmitting || signupMutation.isPending}
+          type="submit"
+          variant="primary"
+        >
+          {isSubmitting || signupMutation.isPending
+            ? "Creating Account..."
+            : "Register Now"}
         </Button>
 
         {/* Divider */}
@@ -122,7 +171,7 @@ export const SignupForm = () => {
         </div>
 
         {/* Secondary Action Button */}
-        <Link to="/login">
+        <Link to="/sign-in">
           <Button variant="secondary" type="button">
             Already have an account? Login
           </Button>

@@ -5,6 +5,7 @@ interface LibraryItemProps {
   description: string;
   status: "Saved" | "Liked" | "Commented" | "Created";
   time: string;
+  onClick?: () => void;
 }
 
 export const LibraryItem = ({
@@ -12,6 +13,7 @@ export const LibraryItem = ({
   description,
   time,
   status,
+  onClick,
 }: LibraryItemProps) => {
   const getStatusConfig = () => {
     switch (status) {
@@ -29,7 +31,10 @@ export const LibraryItem = ({
   const config = getStatusConfig();
 
   return (
-    <div className="flex items-center p-4 hover:bg-slate-50 transition-all gap-4 border-b border-slate-100 last:border-0 cursor-pointer group">
+    <div
+      onClick={onClick}
+      className="flex items-center p-4 hover:bg-slate-50 transition-all gap-4 border-b border-slate-100 last:border-0 cursor-pointer group"
+    >
       {/* Content */}
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-black text-primary truncate group-hover:text-blue-600 transition-colors mb-0.5">

@@ -21,7 +21,16 @@ app.use(express.json()); // Body parser
 
 app.use(helmet()); // Security headers
 
-app.use(cors()); // Enable Cross-Origin Resource Sharing
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+  : ["http://localhost:5173", "http://127.0.0.1:5173"];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  }),
+); // Enable CORS for frontend with cookies/credentials support
 
 app.use(compression()); // Compress responses
 

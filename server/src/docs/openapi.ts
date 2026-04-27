@@ -8,6 +8,9 @@ import {
   resendVerificationSchema,
   updateNameSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordParamsSchema,
+  resetPasswordSchema,
   registerSuccessSchema,
   loginSuccessSchema,
   messageOnlySuccessSchema,
@@ -214,6 +217,89 @@ export const openApiDocument = createDocument({
           },
           "400": {
             description: "Invalid input",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+          "500": {
+            description: "Server error",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+        },
+      },
+    },
+    "/auth/forgot-password": {
+      post: {
+        tags: ["Auth"],
+        summary: "Request a password reset link",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: forgotPasswordSchema,
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Reset link request accepted",
+            content: {
+              "application/json": {
+                schema: messageOnlySuccessSchema,
+              },
+            },
+          },
+          "400": {
+            description: "Invalid input",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+          "500": {
+            description: "Server error",
+            content: {
+              "application/json": {
+                schema: apiErrorSchema,
+              },
+            },
+          },
+        },
+      },
+    },
+    "/auth/reset-password/{token}": {
+      post: {
+        tags: ["Auth"],
+        summary: "Reset password with token",
+        requestParams: {
+          path: resetPasswordParamsSchema,
+        },
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: resetPasswordSchema,
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Password reset",
+            content: {
+              "application/json": {
+                schema: messageOnlySuccessSchema,
+              },
+            },
+          },
+          "400": {
+            description: "Invalid token or input",
             content: {
               "application/json": {
                 schema: apiErrorSchema,

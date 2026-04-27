@@ -3,7 +3,9 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface IPost extends Document {
   title: string;
   description: string;
+  subject: string;
   llmName: string;
+  chatLink: string;
   createdBy: mongoose.Types.ObjectId;
   upvotesCount: number;
   downvotesCount: number;
@@ -24,10 +26,21 @@ const postSchema = new Schema<IPost>(
       trim: true,
       maxlength: [5000, "Description cannot exceed 5000 characters"],
     },
+    subject: {
+      type: String,
+      trim: true,
+      default: "General",
+      maxlength: [100, "Subject cannot exceed 100 characters"],
+    },
     llmName: {
       type: String,
       required: [true, "LLM name is required"],
-      enum: ["OpenAI", "Claude", "Gemini", "Llama", "Mistral", "Cohere"],
+      enum: ["OpenAI", "Claude", "Gemini"],
+    },
+    chatLink: {
+      type: String,
+      trim: true,
+      default: "",
     },
     createdBy: {
       type: Schema.Types.ObjectId,

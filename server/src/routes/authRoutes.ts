@@ -6,6 +6,8 @@ import {
   changePassword,
   verifyEmail,
   resendVerification,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/authController";
 import { protect } from "../middleware/authMiddleware";
 
@@ -15,6 +17,8 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/verify-email/:token", verifyEmail);
 router.post("/resend-verification", resendVerification);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password/:token", resetPassword);
 router.patch("/change-name", protect, changeName);
 router.patch("/change-password", protect, changePassword);
 

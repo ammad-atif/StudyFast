@@ -3,9 +3,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { Input } from "../global/Input";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Card } from "../global/Card";
 import { Button } from "./Button";
+import { useMutation } from "@tanstack/react-query";
+import { api } from "../../api";
+import { useNavigate } from "react-router-dom";
+import { setCredentials } from "../../store/authSlice";
+import { useAppDispatch, useAppSelector } from "../../store";
 const signinSchema = z.object({
   email: z
     .string()
@@ -19,7 +24,28 @@ const signinSchema = z.object({
 
 type SigninFormData = z.infer<typeof signinSchema>;
 
+// User data returned from login endpoint
+type UserLoginData = {
+  _id: string;
+  fullName: string;
+  email: string;
+  isVerified: boolean;
+  token: string;
+};
+
+type LoginResponse = {
+  message?: string;
+  data?: UserLoginData;
+};
+
+type ApiErrorShape = {
+  message?: string;
+};
+
 export const SigninForm = () => {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
   const {
     register,
     handleSubmit,
@@ -30,10 +56,51 @@ export const SigninForm = () => {
     reValidateMode: "onChange",
   });
 
+  // Mutation for login using the shared axios client with interceptors
+  const loginMutation = useMutation<
+    LoginResponse,
+    ApiErrorShape,
+    SigninFormData
+  >({
+    mutationFn: async (payload) =>
+      api.post("/auth/login", {
+        email: payload.email,
+        password: payload.password,
+      }),
+    onSuccess: (response) => {
+      if (response?.data?.token) {
+        // Update global auth state and persistence in one action.
+        dispatch(
+          setCredentials({
+            accessToken: response.data.token,
+            user: {
+              _id: response.data._id,
+              fullName: response.data.fullName,
+              email: response.data.email,
+              isVerified: response.data.isVerified,
+            },
+          }),
+        );
+      }
+
+      // alert(response?.message || "Login successful!");
+      navigate("/", { replace: true }); // Redirect to dashboard after successful login
+    },
+    onError: (error) => {
+      // Surface the normalized error message from interceptor
+      alert(error?.message || "Login failed. Please try again.");
+    },
+  });
+
   const onSubmit = async (data: SigninFormData) => {
-    // Logic for API call
-    console.log("Form Submitted:", data);
+    // Call login mutation with email and password
+    await loginMutation.mutateAsync(data);
   };
+
+  // Redirect before rendering the form to avoid auth-page flicker.
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <>
@@ -68,9 +135,15 @@ export const SigninForm = () => {
         </div>
 
         {/* Primary Action Button */}
-        <Button disabled={isSubmitting} type="submit" variant="primary">
-          {isSubmitting ? "Logging in..." : "Login"}
-          {!isSubmitting && <ArrowRight size={18} />}
+        <Button
+          disabled={isSubmitting || loginMutation.isPending}
+          type="submit"
+          variant="primary"
+        >
+          {isSubmitting || loginMutation.isPending ? "Logging in..." : "Login"}
+          {!isSubmitting && !loginMutation.isPending && (
+            <ArrowRight size={18} />
+          )}
         </Button>
 
         {/* Divider */}
@@ -81,7 +154,7 @@ export const SigninForm = () => {
         </div>
 
         {/* Secondary Action Button */}
-        <Link to="/register">
+        <Link to="/sign-up">
           <Button variant="secondary" type="button">
             Don't have an account? Register{" "}
           </Button>

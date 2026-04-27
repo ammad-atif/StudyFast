@@ -90,6 +90,27 @@ const resendVerificationSchema = z
   })
   .strict();
 
+const forgotPasswordSchema = z
+  .object({
+    email: emailSchema.transform((value) => value.trim().toLowerCase()),
+  })
+  .strict();
+
+const resetPasswordParamsSchema = z
+  .object({
+    token: z.string().min(1, "Reset token is required"),
+  })
+  .strict();
+
+const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(72, "Password is too long"),
+  })
+  .strict();
+
 const updateNameSchema = z
   .object({
     fullName: z
@@ -124,6 +145,9 @@ export {
   resendVerificationSchema,
   updateNameSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordParamsSchema,
+  resetPasswordSchema,
   registerSuccessSchema,
   loginSuccessSchema,
   messageOnlySuccessSchema,

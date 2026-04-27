@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { email, z } from "zod";
 import { apiErrorSchema } from "./authValidation";
 
 // -----------------------------------------------------------------------------
@@ -17,11 +17,57 @@ const createPostRequestSchema = z
       .trim()
       .min(20, "Description must be at least 20 characters")
       .max(5000, "Description cannot exceed 5000 characters"),
+    subject: z
+      .string()
+      .trim()
+      .min(2, "Subject must be at least 2 characters")
+      .max(100, "Subject cannot exceed 100 characters")
+      .optional(),
     llmName: z
       .enum(["OpenAI", "Claude", "Gemini", "Llama", "Mistral", "Cohere"])
       .meta({ example: "OpenAI" }),
+    chatLink: z.url("Please enter a valid AI chat URL"),
   })
   .strict();
+
+const updatePostRequestSchema = z
+  .object({
+    title: z
+      .string()
+      .trim()
+      .min(5, "Title must be at least 5 characters")
+      .max(150, "Title cannot exceed 150 characters")
+      .optional(),
+    description: z
+      .string()
+      .trim()
+      .min(20, "Description must be at least 20 characters")
+      .max(5000, "Description cannot exceed 5000 characters")
+      .optional(),
+    subject: z
+      .string()
+      .trim()
+      .min(2, "Subject must be at least 2 characters")
+      .max(100, "Subject cannot exceed 100 characters")
+      .optional(),
+    llmName: z
+      .enum(["OpenAI", "Claude", "Gemini", "Llama", "Mistral", "Cohere"])
+      .optional(),
+    chatLink: z.url("Please enter a valid AI chat URL").optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.title !== undefined ||
+      value.description !== undefined ||
+      value.subject !== undefined ||
+      value.llmName !== undefined ||
+      value.chatLink !== undefined,
+    {
+      message: "At least one field must be provided",
+      path: ["title"],
+    },
+  );
 
 const postIdParamsSchema = z
   .object({
@@ -67,7 +113,7 @@ const listCommentsQueryRequestSchema = z
 const postAuthorResponseSchema = z.object({
   _id: z.string().regex(/^[a-f\d]{24}$/i, "Invalid user ID format"),
   fullName: z.string(),
-  avatar: z.string(),
+  email: z.email(),
 });
 
 const postVoteStatsResponseSchema = z.object({
@@ -75,16 +121,26 @@ const postVoteStatsResponseSchema = z.object({
   downvotesCount: z.number(),
 });
 
+const postViewerRelationResponseSchema = z.object({
+  isSaved: z.boolean(),
+  userVote: z.enum(["upvote", "downvote"]).nullable(),
+  isCreatedByViewer: z.boolean(),
+});
+
 const postEntityResponseSchema = z.object({
   _id: z.string().regex(/^[a-f\d]{24}$/i, "Invalid post ID format"),
   title: z.string(),
   description: z.string(),
+  subject: z.string(),
   llmName: z
     .enum(["OpenAI", "Claude", "Gemini", "Llama", "Mistral", "Cohere"])
     .meta({ example: "OpenAI" }),
+  chatLink: z.string(),
   createdBy: postAuthorResponseSchema,
   ...postVoteStatsResponseSchema.shape,
   commentsCount: z.number(),
+  // Present on list responses when Authorization header is provided.
+  viewer: postViewerRelationResponseSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -149,6 +205,7 @@ export {
   apiErrorSchema,
   // Request schemas
   createPostRequestSchema,
+  updatePostRequestSchema,
   postIdParamsSchema,
   commentIdParamsSchema,
   createCommentRequestSchema,
@@ -157,6 +214,7 @@ export {
   // Response schemas
   postAuthorResponseSchema,
   postVoteStatsResponseSchema,
+  postViewerRelationResponseSchema,
   postEntityResponseSchema,
   postCommentEntityResponseSchema,
   postListSuccessResponseSchema,
