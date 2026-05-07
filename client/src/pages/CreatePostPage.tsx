@@ -8,6 +8,7 @@ import { Card } from "../components/global/Card";
 import { Button } from "../components/create-post/Button";
 import { Input } from "../components/global/Input";
 import { TextArea } from "../components/global/TextArea";
+import { TagInput } from "../components/create-post/TagInput";
 import { api } from "../api";
 
 //Validation Schema
@@ -42,6 +43,7 @@ type PostDetailsResponse = {
     title: string;
     description: string;
     subject?: string;
+    tags?: string[];
     llmName: "OpenAI" | "Claude" | "Gemini";
     chatLink?: string;
   };
@@ -63,6 +65,8 @@ export const CreatePostPage = () => {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreatePostFormData>({
     resolver: zodResolver(createPostSchema),
@@ -81,6 +85,8 @@ export const CreatePostPage = () => {
     },
   });
 
+  const tags = watch("tags");
+
   const postQuery = useQuery<PostDetailsResponse, ApiErrorShape>({
     queryKey: ["post", id, "edit-form"],
     queryFn: async () => api.get(`/posts/${id}`),
@@ -97,7 +103,7 @@ export const CreatePostPage = () => {
       subject: post.subject || "",
       chatLink: post.chatLink || "",
       aiTool: post.llmName,
-      tags: [],
+      tags: post.tags || [],
     });
   }, [postQuery.data, reset]);
 
@@ -113,6 +119,7 @@ export const CreatePostPage = () => {
         subject: payload.subject?.trim() || undefined,
         llmName: payload.aiTool,
         chatLink: payload.chatLink,
+        tags: payload.tags && payload.tags.length > 0 ? payload.tags : undefined,
       };
 
       if (isEditMode && id) {
@@ -197,18 +204,17 @@ export const CreatePostPage = () => {
           />
 
           {/* Tags */}
-          {/* <TagInput
+          <TagInput
             label="Tags"
             placeholder="Type a tag and press Enter..."
             tags_value={tags}
-            onTagsChange={(newTags) =>
+            onTagsChange={(newTags: string[]) =>
               setValue("tags", newTags, { shouldValidate: true })
             }
             // onBlur={() => setValue("tags", tags, { shouldValidate: true })}
             error={errors.tags?.message}
             maxTags={10}
-          /> */}
-
+          />
           {/* AI Tool */}
           <div className="flex flex-col gap-2 w-full">
             <label className="text-primary text-[13px] font-bold">

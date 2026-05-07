@@ -14,6 +14,7 @@ import { HomePage } from "./pages/HomePage";
 import { ErrorPage } from "./pages/ErrorPage";
 import { useAppSelector } from "./store";
 import { Navbar } from "./components/global/Navbar";
+import { HomeFilterProvider } from "./context/HomeFilterContext";
 
 function App() {
   const authRoutes = [
@@ -35,8 +36,9 @@ function App() {
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
   return (
     <BrowserRouter>
-      <Navbar />
-      <Routes>
+      <HomeFilterProvider>
+        <Navbar />
+        <Routes>
         {authRoutes.map((route) => (
           <Route
             key={route.path}
@@ -57,6 +59,7 @@ function App() {
         )}
         <Route path="*" element={<ErrorPage />} />
       </Routes>
+      </HomeFilterProvider>
     </BrowserRouter>
   );
 }

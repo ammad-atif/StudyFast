@@ -3,6 +3,8 @@ import { PostCard } from "../components/home/PostCard";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Sidebar } from "../components/home/Sidebar";
+import { useHomeFilter } from "../context/HomeFilterContext";
 
 type ApiErrorShape = {
   message?: string;
@@ -63,18 +65,29 @@ export const HomePage = () => {
   const [searchInput, setSearchInput] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
 
+  const { selectedSubject, selectedTags } = useHomeFilter();
+
   const handleSearchSubmit = () => {
     setSubmittedSearch(searchInput.trim());
   };
 
   const postsQuery = useInfiniteQuery<PostsResponse, ApiErrorShape>({
-    queryKey: ["posts", "feed", selectedSort, submittedSearch],
+    queryKey: [
+      "posts",
+      "feed",
+      selectedSort,
+      submittedSearch,
+      selectedSubject,
+      selectedTags,
+    ],
     queryFn: async ({ pageParam = 1 }) =>
       api.get("/posts", {
         params: {
           page: pageParam,
           sortBy: selectedSort,
           ...(submittedSearch ? { q: submittedSearch } : {}),
+          ...(selectedSubject ? { subject: selectedSubject } : {}),
+          ...(selectedTags.length > 0 ? { tags: selectedTags.join(",") } : {}),
         },
       }),
     getNextPageParam: (lastPage) => {
@@ -118,9 +131,9 @@ export const HomePage = () => {
         {/* Main Content Area with Sidebar */}
 
         {/* Sidebar */}
-        {/* <aside className="h-[calc(100vh-6rem)] w-1/3 hidden md:block sticky top-0 overflow-auto">
+        <aside className="h-[calc(100vh-6rem)] w-1/3 hidden md:block sticky top-0 overflow-auto">
           <Sidebar />
-        </aside> */}
+        </aside>
 
         {/* Main Content */}
         <section className="flex-1 min-h-0 flex flex-col gap-4">

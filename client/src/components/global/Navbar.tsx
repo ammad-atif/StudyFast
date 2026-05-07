@@ -1,8 +1,23 @@
 import { Link, useLocation } from "react-router-dom";
-import { GraduationCap, Share2, Menu, X } from "lucide-react";
+import { GraduationCap, Share2, Menu, X, Code, Loader } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppSelector } from "../../store";
 import { getAvatarUrl } from "../../utils/avatar";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../../api";
+import { useHomeFilter } from "../../context/HomeFilterContext";
+
+type SubjectsTagsResponse = {
+  message?: string;
+  data: {
+    subjects: string[];
+    tags: string[];
+  };
+};
+
+type SubjectsTagsError = {
+  message?: string;
+};
 
 export const Navbar = () => {
   const location = useLocation();
@@ -10,6 +25,36 @@ export const Navbar = () => {
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
   const user = useAppSelector((state) => state.auth.user);
   const avatarSrc = getAvatarUrl(user?.fullName || user?.email || "default");
+  
+  const isHomePage = location.pathname === "/";
+  const { selectedSubject, selectedTags, setSelectedSubject, setSelectedTags } = useHomeFilter();
+  
+  const subjectsTagsQuery = useQuery<SubjectsTagsResponse, SubjectsTagsError>({
+    queryKey: ["subjects-tags"],
+    queryFn: async () => api.get("/posts/subjects-tags/all"),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: isHomePage,
+  });
+
+  const subjects = subjectsTagsQuery.data?.data.subjects || [];
+  const tags = subjectsTagsQuery.data?.data.tags || [];
+
+  const handleSubjectClick = (subject: string) => {
+    if (selectedSubject === subject) {
+      setSelectedSubject(undefined);
+    } else {
+      setSelectedSubject(subject);
+    }
+  };
+
+  const handleTagClick = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter((t) => t !== tag));
+    } else {
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
+  
   const onClose = () => {
     setIsOpen(false);
   };
@@ -134,24 +179,112 @@ export const Navbar = () => {
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
-          {navLinks.map((link) => {
-            const isActive = location.pathname === link.path;
-            return (
-              <Link
-                key={link.name}
-                to={link.path}
-                onClick={onClose}
-                className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-primary text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-primary"
-                }`}
-              >
-                {link.name}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+          {/* Nav Links */}
+          <div className="space-y-1">
+            {navLinks.map((link) => {
+              const isActive = location.pathname === link.path;
+              return (
+                <Link
+                  key={link.name}
+                  to={link.path}
+                  onClick={onClose}
+                  className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-primary text-white"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-primary"
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Subjects Section - Only show on home page */}
+          {isHomePage && (
+            <>
+              <div className="border-t pt-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-3 mb-2">
+                  Subjects
+                </h3>
+                <div className="space-y-1">
+                  {subjectsTagsQuery.isLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader size={16} className="text-slate-400 animate-spin" />
+                    </div>
+                  ) : subjectsTagsQuery.isError ? (
+                    <div className="text-slate-500 text-xs px-3 py-2">
+                      Failed to load subjects
+                    </div>
+                  ) : subjects.length === 0 ? (
+                    <div className="text-slate-500 text-xs px-3 py-2">
+                      No subjects found
+                    </div>
+                  ) : (
+                    subjects.map((subject) => (
+                      <button
+                        key={subject}
+                        onClick={() => handleSubjectClick(subject)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-left text-sm ${
+                          selectedSubject === subject
+                            ? "bg-primary/10 text-primary font-bold"
+                            : "text-slate-600 hover:bg-slate-100 font-medium"
+                        }`}
+                      >
+                        <span
+                          className={`flex-shrink-0 ${
+                            selectedSubject === subject
+                              ? "text-primary"
+                              : "text-slate-400"
+                          }`}
+                        >
+                          <Code size={16} />
+                        </span>
+                        <span className="truncate">{subject}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Tags Section */}
+              <div className="border-t pt-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-3 mb-2">
+                  Popular Tags
+                </h3>
+                {subjectsTagsQuery.isLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader size={16} className="text-slate-400 animate-spin" />
+                  </div>
+                ) : subjectsTagsQuery.isError ? (
+                  <div className="text-slate-500 text-xs px-3 py-2">
+                    Failed to load tags
+                  </div>
+                ) : tags.length === 0 ? (
+                  <div className="text-slate-500 text-xs px-3 py-2">
+                    No tags found
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 px-3">
+                    {tags.map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => handleTagClick(tag)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                          selectedTags.includes(tag)
+                            ? "bg-primary text-white"
+                            : "bg-slate-100 text-slate-600 hover:bg-primary hover:text-white"
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </nav>
 
         {/* Footer */}
