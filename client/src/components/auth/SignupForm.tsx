@@ -18,9 +18,8 @@ const signupSchema = z
       .min(2, "Name must be at least 2 characters"),
     universityEmail: z
       .string()
-      .min(1, "University email is required")
       .email("Invalid university email")
-      .endsWith(".edu", "Must be a .edu email"),
+      .optional(),
     personalEmail: z
       .string()
       .min(1, "Personal email is required")
@@ -72,11 +71,10 @@ export const SignupForm = () => {
       password: string;
     }
   >({
-    // Use the shared axios instance so request/response interceptors are applied.
     mutationFn: async (payload) => api.post("/auth/register", payload),
     onSuccess: (response) => {
       alert(response?.message);
-      // Optionally, you could redirect to sign-in or clear the form here.
+
       setTimeout(() => {
         navigate("/sign-in");
       }, 3000);

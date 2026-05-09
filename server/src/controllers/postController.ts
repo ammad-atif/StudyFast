@@ -80,6 +80,8 @@ export const getPosts = async (req: AuthRequest, res: Response) => {
       q: normalizeQueryString(req.query.q),
       sortBy: normalizeQueryString(req.query.sortBy),
       page: normalizeQueryString(req.query.page) ?? 1,
+      subject: normalizeQueryString(req.query.subject),
+      tags: normalizeQueryString(req.query.tags),
     });
 
     if (!parsed.success) {
@@ -92,7 +94,7 @@ export const getPosts = async (req: AuthRequest, res: Response) => {
       );
     }
 
-    const { q, sortBy, page } = parsed.data;
+    const { q, sortBy, page, subject, tags } = parsed.data;
 
     // Build Mongo query object dynamically based on provided filters.
     const query: Record<string, any> = {};
@@ -105,6 +107,14 @@ export const getPosts = async (req: AuthRequest, res: Response) => {
         { title: { $regex: q, $options: "i" } },
         { description: { $regex: q, $options: "i" } },
       ];
+    }
+
+    if (subject) {
+      query.subject = { $regex: subject, $options: "i" };
+    }
+
+    if (tags) {
+      query.tags = { $in: tags.split(",").map((tag) => tag.trim()) };
     }
 
     const sortCriteria: Record<string, SortOrder> =
@@ -179,6 +189,30 @@ export const getPosts = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     return sendError(res, 500, "Failed to fetch posts", "SERVER_ERROR");
+  }
+};
+
+// @desc    Get all distinct subjects and tags
+// @route   GET /posts/subjects-tags/all
+// @access  Public
+export const getSubjectsAndTags = async (_req: Request, res: Response) => {
+  try {
+    const [subjects, tags] = await Promise.all([
+      Post.distinct("subject"),
+      Post.distinct("tags"),
+    ]);
+
+    return sendSuccess(res, 200, "Subjects and tags fetched successfully", {
+      subjects: subjects.filter(Boolean).sort(),
+      tags: Array.from(new Set(tags.flat().filter(Boolean))).sort(),
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      500,
+      "Failed to fetch subjects and tags",
+      "SERVER_ERROR",
+    );
   }
 };
 
@@ -442,6 +476,9 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
     if (bodyParsed.data.subject !== undefined) {
       post.subject = bodyParsed.data.subject;
     }
+    if (bodyParsed.data.tags !== undefined) {
+      post.tags = bodyParsed.data.tags;
+    }
     if (bodyParsed.data.llmName !== undefined) {
       post.llmName = bodyParsed.data.llmName;
     }
@@ -486,6 +523,7 @@ export const createPost = async (req: AuthRequest, res: Response) => {
       title: parsed.data.title,
       description: parsed.data.description,
       subject: parsed.data.subject?.trim() || "General",
+      tags: parsed.data.tags || [],
       llmName: parsed.data.llmName,
       chatLink: parsed.data.chatLink,
       createdBy: user._id,

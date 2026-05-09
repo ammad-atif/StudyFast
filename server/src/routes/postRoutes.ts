@@ -8,6 +8,7 @@ import {
   getLibraryPosts,
   getPostById,
   getPosts,
+  getSubjectsAndTags,
   removeVote,
   savePost,
   unsavePost,
@@ -23,6 +24,7 @@ import {
 const router = express.Router();
 
 router.get("/", optionalProtect, getPosts);
+router.get("/subjects-tags/all", getSubjectsAndTags);
 router.get("/library", protect, getLibraryPosts);
 router.get("/:postId", optionalProtect, getPostById);
 router.get("/:postId/comments", getComments);

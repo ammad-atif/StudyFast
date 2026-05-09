@@ -6,6 +6,7 @@ export interface IPost extends Document {
   subject: string;
   llmName: string;
   chatLink: string;
+  tags: string[];
   createdBy: mongoose.Types.ObjectId;
   upvotesCount: number;
   downvotesCount: number;
@@ -41,6 +42,10 @@ const postSchema = new Schema<IPost>(
       type: String,
       trim: true,
       default: "",
+    },
+    tags: {
+      type: [String],
+      default: [],
     },
     createdBy: {
       type: Schema.Types.ObjectId,

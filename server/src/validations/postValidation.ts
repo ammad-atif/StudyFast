@@ -23,6 +23,7 @@ const createPostRequestSchema = z
       .min(2, "Subject must be at least 2 characters")
       .max(100, "Subject cannot exceed 100 characters")
       .optional(),
+    tags: z.array(z.string().trim().min(2).max(20)).max(10).optional(),
     llmName: z
       .enum(["OpenAI", "Claude", "Gemini", "Llama", "Mistral", "Cohere"])
       .meta({ example: "OpenAI" }),
@@ -50,6 +51,7 @@ const updatePostRequestSchema = z
       .min(2, "Subject must be at least 2 characters")
       .max(100, "Subject cannot exceed 100 characters")
       .optional(),
+    tags: z.array(z.string().trim().min(2).max(20)).max(10).optional(),
     llmName: z
       .enum(["OpenAI", "Claude", "Gemini", "Llama", "Mistral", "Cohere"])
       .optional(),
@@ -61,6 +63,7 @@ const updatePostRequestSchema = z
       value.title !== undefined ||
       value.description !== undefined ||
       value.subject !== undefined ||
+      value.tags !== undefined ||
       value.llmName !== undefined ||
       value.chatLink !== undefined,
     {
@@ -96,6 +99,8 @@ const listPostsQueryRequestSchema = z
     q: z.string().trim().optional(),
     sortBy: z.enum(["newest", "most-upvoted"]).default("newest"),
     page: z.coerce.number().int().min(1).default(1),
+    subject: z.string().trim().optional(),
+    tags: z.string().trim().optional(),
   })
   .strict();
 
@@ -132,6 +137,7 @@ const postEntityResponseSchema = z.object({
   title: z.string(),
   description: z.string(),
   subject: z.string(),
+  tags: z.array(z.string()),
   llmName: z
     .enum(["OpenAI", "Claude", "Gemini", "Llama", "Mistral", "Cohere"])
     .meta({ example: "OpenAI" }),

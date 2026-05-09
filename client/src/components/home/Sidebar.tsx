@@ -79,7 +79,7 @@ export const Sidebar = () => {
                 }`}
               >
                 <span
-                  className={`flex-shrink-0 ${
+                  className={`shrink-0 ${
                     selectedSubject === subject
                       ? "text-primary"
                       : "text-slate-400"
