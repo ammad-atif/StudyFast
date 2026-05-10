@@ -170,7 +170,8 @@ export const getPosts = async (req: AuthRequest, res: Response) => {
           viewer: {
             isSaved: savedPostIds.has(postId),
             userVote: voteByPostId.get(postId) ?? null,
-            isCreatedByViewer: post.createdBy._id.toString() === req.user!._id.toString(),
+            isCreatedByViewer:
+              post.createdBy._id.toString() === req.user!._id.toString(),
           },
         };
       });
@@ -415,7 +416,8 @@ export const getPostById = async (req: AuthRequest, res: Response) => {
       viewer: {
         isSaved: savedPostIds.has(post._id.toString()),
         userVote: userVote?.voteType ?? null,
-        isCreatedByViewer: post.createdBy._id.toString() === req.user._id.toString(),
+        isCreatedByViewer:
+          post.createdBy._id.toString() === req.user._id.toString(),
       },
     });
   } catch (error) {

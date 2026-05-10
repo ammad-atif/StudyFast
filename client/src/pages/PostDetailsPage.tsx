@@ -28,6 +28,7 @@ type PostDetails = {
   title: string;
   description: string;
   subject: string;
+  tags: string[];
   llmName: string;
   chatLink: string;
   createdBy: {
@@ -91,7 +92,11 @@ export const PostDetailsPage = () => {
     await queryClient.invalidateQueries({ queryKey: ["posts", "feed"] });
   };
 
-  const voteMutation = useMutation<unknown, ApiErrorShape, "upvote" | "downvote">({
+  const voteMutation = useMutation<
+    unknown,
+    ApiErrorShape,
+    "upvote" | "downvote"
+  >({
     mutationFn: async (voteType) => {
       if (!id) return;
       const currentVote = post?.viewer?.userVote ?? null;
@@ -181,7 +186,9 @@ export const PostDetailsPage = () => {
         <div className="flex items-center gap-1">
           <span className="text-slate-600 text-sm">Subject:</span>
           <ChevronRight size={14} className="text-slate-400" />
-          <span className="text-primary font-bold">{post.subject || "General"}</span>
+          <span className="text-primary font-bold">
+            {post.subject || "General"}
+          </span>
         </div>
 
         <div className="flex items-center gap-1">
@@ -192,9 +199,20 @@ export const PostDetailsPage = () => {
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2">
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700">
-            AI Discussion
-          </span>
+          {post.tags.length > 0 ? (
+            post.tags.map((tag) => (
+              <span
+                key={tag}
+                className="px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700"
+              >
+                {tag}
+              </span>
+            ))
+          ) : (
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700">
+              No tags
+            </span>
+          )}
         </div>
       </div>
 
@@ -221,7 +239,9 @@ export const PostDetailsPage = () => {
               >
                 <ArrowUp size={20} />
               </button>
-              <span className="font-black text-sm px-3 text-primary">{netVotes}</span>
+              <span className="font-black text-sm px-3 text-primary">
+                {netVotes}
+              </span>
               <button
                 onClick={() => voteMutation.mutate("downvote")}
                 className={`p-1.5 hover:bg-white rounded-full transition-all active:scale-90 cursor-pointer ${
@@ -318,7 +338,9 @@ export const PostDetailsPage = () => {
           />
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-lg font-black text-primary">{post.createdBy.fullName}</span>
+              <span className="text-lg font-black text-primary">
+                {post.createdBy.fullName}
+              </span>
               <Verified size={18} className="text-blue-500 fill-blue-500/10" />
             </div>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">
