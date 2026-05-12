@@ -8,8 +8,18 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Generate or retrieve request ID for tracing
+const getOrCreateRequestId = (): string => {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    // Fallback for older browsers
+    return `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+};
+
 // ─── Request interceptor ──────────────────────────────────────────
-// Attach access token from Redux and enforce expiry before every request.
+// Attach access token from Redux, enforce expiry, and add request ID for tracing
 api.interceptors.request.use((config) => {
   const { accessToken, expiresAt } = store.getState().auth;
 
@@ -22,6 +32,10 @@ api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
+
+  // Add request ID for distributed tracing
+  config.headers["x-request-id"] = getOrCreateRequestId();
+
   return config;
 });
 
