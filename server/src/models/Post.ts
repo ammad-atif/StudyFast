@@ -11,6 +11,10 @@ export interface IPost extends Document {
   upvotesCount: number;
   downvotesCount: number;
   commentsCount: number;
+  embeddingStatus?: 'pending' | 'queued' | 'completed' | 'failed';
+  embeddingJobId?: string;
+  embeddingError?: string;
+  embeddingUpdatedAt?: Date;
 }
 
 const postSchema = new Schema<IPost>(
@@ -64,6 +68,23 @@ const postSchema = new Schema<IPost>(
     commentsCount: {
       type: Number,
       default: 0,
+    },
+    embeddingStatus: {
+      type: String,
+      enum: ['pending', 'queued', 'completed', 'failed'],
+      default: 'pending',
+    },
+    embeddingJobId: {
+      type: String,
+      default: null,
+    },
+    embeddingError: {
+      type: String,
+      default: null,
+    },
+    embeddingUpdatedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

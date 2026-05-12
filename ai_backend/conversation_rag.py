@@ -126,7 +126,14 @@ class ConversationRAG:
         if not self.pipeline.pc:
             raise ValueError("Pinecone client not initialized on pipeline")
 
-        index = self.pipeline.pc.Index(self.pipeline.index_name)
+        # If the index does not exist yet, treat it as "no embeddings yet"
+        # so embedding creation can proceed and create the index later.
+        try:
+            index = self.pipeline.pc.Index(self.pipeline.index_name)
+        except Exception as exc:
+            if "not found" in str(exc).lower() or "404" in str(exc):
+                return False
+            raise
 
         filter_obj = {"chat_id": {"$eq": post_id}}
 
@@ -143,16 +150,19 @@ class ConversationRAG:
             total_vectors = getattr(stats, "total_vector_count", None)
             if total_vectors is not None:
                 return int(total_vectors) > 0
-        except Exception:
-            pass
+        except Exception as exc:
+            # Missing index should not fail idempotency check.
+            if "not found" in str(exc).lower() or "404" in str(exc):
+                return False
 
         # Fallback for older records or SDKs: fetch by known chunk IDs.
         try:
             fetched = self._fetch_vectors_by_ids(index, [f"{post_id}_chunk_0", "chunk_0"])
             if fetched:
                 return True
-        except Exception:
-            pass
+        except Exception as exc:
+            if "not found" in str(exc).lower() or "404" in str(exc):
+                return False
 
         return False
 

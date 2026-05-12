@@ -9,6 +9,9 @@ import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
 import { connectDB } from "./config/db";
 import { mergedOpenApiDocument } from "./docs/mergedOpenapi";
+import { requestContextMiddleware } from "./middleware/requestContext";
+import { errorHandler } from "./middleware/errorHandler";
+import aiRoutes from "./routes/aiRoutes";
 
 dotenv.config();
 
@@ -18,6 +21,7 @@ connectDB();
 
 // Middleware
 app.use(express.json()); // Body parser
+app.use(requestContextMiddleware); // Request context with requestId
 
 app.use(helmet()); // Security headers
 
@@ -69,6 +73,7 @@ import postRoutes from "./routes/postRoutes";
 // Routes
 app.use("/auth", authRoutes);
 app.use("/posts", postRoutes);
+app.use("/ai", aiRoutes);
 
 // OpenAPI JSON for tooling (frontend type generation, SDKs, CI validation)
 app.get("/openapi.json", (_req: Request, res: Response) => {
@@ -84,5 +89,8 @@ app.use(
     customSiteTitle: "StudyFAST API Docs",
   }),
 );
+// Error handler (must be last)
+app.use(errorHandler);
+
 
 export default app;

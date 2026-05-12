@@ -29,6 +29,11 @@ import {
   postListSuccessResponseSchema,
   updatePostRequestSchema,
 } from "../validations/postValidation";
+import {
+  enqueueEmbeddingSchema,
+  ragQuerySchema,
+  statusCheckSchema,
+} from "../validations/aiValidation";
 
 export const mergedOpenApiDocument = createDocument({
   openapi: "3.1.0",
@@ -745,6 +750,127 @@ export const mergedOpenApiDocument = createDocument({
               },
             },
           },
+        },
+      },
+    },
+    "/ai/embeddings/enqueue": {
+      post: {
+        tags: ["AI"],
+        summary: "Enqueue embedding creation for a post",
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: enqueueEmbeddingSchema,
+            },
+          },
+        },
+        responses: {
+          "202": {
+            description: "Job accepted",
+            content: {
+              "application/json": {
+                schema: z.object({
+                  success: z.literal(true),
+                  message: z.string(),
+                  data: z.object({ jobId: z.string() }).optional(),
+                  requestId: z.string().optional(),
+                }),
+              },
+            },
+          },
+          "400": { description: "Invalid input", content: { "application/json": { schema: apiErrorSchema } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: apiErrorSchema } } },
+        },
+      },
+    },
+    "/ai/embeddings/{postId}/status": {
+      get: {
+        tags: ["AI"],
+        summary: "Check embedding existence/status for a post",
+        requestParams: { path: statusCheckSchema },
+        responses: {
+          "200": {
+            description: "Status retrieved",
+            content: {
+              "application/json": {
+                schema: z.object({
+                  success: z.literal(true),
+                  post_id: z.string(),
+                  index: z.string(),
+                  exists: z.boolean(),
+                  message: z.string(),
+                  request_id: z.string().optional(),
+                }),
+              },
+            },
+          },
+          "500": { description: "Server error", content: { "application/json": { schema: apiErrorSchema } } },
+        },
+      },
+    },
+    "/ai/answer": {
+      post: {
+        tags: ["AI"],
+        summary: "Answer a question for a specific post (RAG proxy)",
+        security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: ragQuerySchema } } },
+        responses: {
+          "200": { description: "Answer generated", content: { "application/json": { schema: z.object({ success: z.literal(true), message: z.string(), answer: z.string(), request_id: z.string().optional() }) } } },
+          "400": { description: "Invalid input", content: { "application/json": { schema: apiErrorSchema } } },
+          "504": { description: "Upstream timeout", content: { "application/json": { schema: apiErrorSchema } } },
+        },
+      },
+    },
+    "/ai/summary": {
+      post: {
+        tags: ["AI"],
+        summary: "Generate a summary for a post (RAG proxy)",
+        security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: statusCheckSchema } } },
+        responses: {
+          "200": { description: "Summary generated", content: { "application/json": { schema: z.object({ success: z.literal(true), message: z.string(), summary: z.string(), request_id: z.string().optional() }) } } },
+          "400": { description: "Invalid input", content: { "application/json": { schema: apiErrorSchema } } },
+          "504": { description: "Upstream timeout", content: { "application/json": { schema: apiErrorSchema } } },
+        },
+      },
+    },
+    "/ai/quiz": {
+      post: {
+        tags: ["AI"],
+        summary: "Generate quiz questions from a post (RAG proxy)",
+        security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: statusCheckSchema } } },
+        responses: {
+          "200": { description: "Quiz generated", content: { "application/json": { schema: z.object({ success: z.literal(true), message: z.string(), quiz: z.array(z.any()), request_id: z.string().optional() }) } } },
+          "400": { description: "Invalid input", content: { "application/json": { schema: apiErrorSchema } } },
+          "504": { description: "Upstream timeout", content: { "application/json": { schema: apiErrorSchema } } },
+        },
+      },
+    },
+    "/ai/search": {
+      post: {
+        tags: ["AI"],
+        summary: "Search within post embeddings (RAG proxy)",
+        security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: ragQuerySchema } } },
+        responses: {
+          "200": {
+            description: "Search results",
+            content: {
+              "application/json": {
+                schema: z.object({
+                  success: z.literal(true),
+                  message: z.string(),
+                  results: z.array(z.object({ text: z.string(), score: z.number() })),
+                  request_id: z.string().optional(),
+                }),
+              },
+            },
+          },
+          "400": { description: "Invalid input", content: { "application/json": { schema: apiErrorSchema } } },
+          "504": { description: "Upstream timeout", content: { "application/json": { schema: apiErrorSchema } } },
         },
       },
     },

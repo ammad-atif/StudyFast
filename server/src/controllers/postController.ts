@@ -6,6 +6,7 @@ import PostComment from "../models/PostComment";
 import PostVote, { VoteType } from "../models/PostVote";
 import User from "../models/User";
 import { AuthRequest } from "../middleware/authMiddleware";
+import embeddingQueue from "../queue/embeddingQueue";
 import {
   createPostRequestSchema,
   postIdParamsSchema,
@@ -530,6 +531,22 @@ export const createPost = async (req: AuthRequest, res: Response) => {
       chatLink: parsed.data.chatLink,
       createdBy: user._id,
     });
+
+    // Enqueue embedding job asynchronously (non-blocking)
+    if (parsed.data.chatLink) {
+      const job = await embeddingQueue.add('create-embeddings', {
+        postId: post._id.toString(),
+        chatLink: parsed.data.chatLink,
+        requestId: (req as any).requestId || 'unknown',
+      });
+      
+      // Update post with job ID
+      await Post.findByIdAndUpdate(post._id, {
+        embeddingJobId: job.id,
+        embeddingStatus: 'queued',
+        embeddingUpdatedAt: new Date(),
+      });
+    }
 
     const populated = await Post.findById(post._id)
       .populate("createdBy", "fullName avatar")
