@@ -1,0 +1,24 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const postController_1 = require("../controllers/postController");
+const authMiddleware_1 = require("../middleware/authMiddleware");
+const router = express_1.default.Router();
+router.get("/", authMiddleware_1.optionalProtect, postController_1.getPosts);
+router.get("/subjects-tags/all", postController_1.getSubjectsAndTags);
+router.get("/library", authMiddleware_1.protect, postController_1.getLibraryPosts);
+router.get("/:postId", authMiddleware_1.optionalProtect, postController_1.getPostById);
+router.get("/:postId/comments", postController_1.getComments);
+router.post("/", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.createPost);
+router.delete("/:postId", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.deletePost);
+router.patch("/:postId", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.updatePost);
+router.post("/:postId/upvote", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.upvotePost);
+router.post("/:postId/downvote", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.downvotePost);
+router.delete("/:postId/vote", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.removeVote);
+router.post("/:postId/save", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.savePost);
+router.delete("/:postId/save", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.unsavePost);
+router.post("/:postId/comments", authMiddleware_1.protect, authMiddleware_1.requireVerified, postController_1.addComment);
+exports.default = router;

@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
-import { IUser } from "../models/User";
 import { jwt_payload_schema } from "../validations/authValidation";
 
 const sendError = (
@@ -18,13 +17,9 @@ const sendError = (
   });
 };
 
-// Extend Express Request type to include user
-export interface AuthRequest extends Request {
-  user?: IUser | null;
-}
-
+// Middleware to attach user to request (user is now part of Express Request via module augmentation)
 export const protect = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction,
 ) => {
@@ -70,7 +65,7 @@ export const protect = async (
 };
 
 export const optionalProtect = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction,
 ) => {
@@ -112,7 +107,7 @@ export const optionalProtect = async (
 };
 
 export const requireVerified = (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction,
 ) => {

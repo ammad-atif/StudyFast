@@ -15,7 +15,6 @@ import {
   resetPasswordSchema,
   jwt_payload_schema,
 } from "../validations/authValidation";
-import { AuthRequest } from "../middleware/authMiddleware";
 import { sendEmail } from "../utils/sendEmail";
 const sendError = (
   res: Response,
@@ -504,7 +503,7 @@ export const resetPassword = async (req: Request, res: Response) => {
 // @desc    Update full name with current password confirmation
 // @route   PATCH /auth/change-name
 // @access  Private
-export const changeName = async (req: AuthRequest, res: Response) => {
+export const changeName = async (req: Request, res: Response) => {
   try {
     // Validate input using Zod
     const parsed = updateNameSchema.safeParse(req.body);
@@ -552,7 +551,7 @@ export const changeName = async (req: AuthRequest, res: Response) => {
 // @desc    Change password with current password confirmation
 // @route   PATCH /auth/change-password
 // @access  Private
-export const changePassword = async (req: AuthRequest, res: Response) => {
+export const changePassword = async (req: Request, res: Response) => {
   try {
     // Validate input using Zod
     const parsed = changePasswordSchema.safeParse(req.body);

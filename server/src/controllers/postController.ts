@@ -5,7 +5,6 @@ import Post from "../models/Post";
 import PostComment from "../models/PostComment";
 import PostVote, { VoteType } from "../models/PostVote";
 import User from "../models/User";
-import { AuthRequest } from "../middleware/authMiddleware";
 import embeddingQueue from "../queue/embeddingQueue";
 import {
   createPostRequestSchema,
@@ -61,7 +60,7 @@ const normalizeQueryString = (value?: any): string | undefined => {
 
 // Ensures request has authenticated user attached by middleware.
 // Example: if token is missing/invalid, returns 401 and null.
-const ensureAuthUser = (req: AuthRequest, res: Response) => {
+const ensureAuthUser = (req: Request, res: Response) => {
   if (!req.user) {
     sendError(res, 401, "Not authorized", "NOT_AUTHORIZED");
     return null;
@@ -74,7 +73,7 @@ const ensureAuthUser = (req: AuthRequest, res: Response) => {
 // @access  Public (enriched with viewer flags when authenticated)
 // Example request:
 // GET /posts?q=react&sortBy=most-upvoted&page=1
-export const getPosts = async (req: AuthRequest, res: Response) => {
+export const getPosts = async (req: Request, res: Response) => {
   try {
     const limit = 20;
     const parsed = listPostsQueryRequestSchema.safeParse({
@@ -222,7 +221,7 @@ export const getSubjectsAndTags = async (_req: Request, res: Response) => {
 // @route   GET /posts/library
 // @access  Authenticated
 // Example request: GET /posts/library?filter=saved&page=1&sortBy=newest
-export const getLibraryPosts = async (req: AuthRequest, res: Response) => {
+export const getLibraryPosts = async (req: Request, res: Response) => {
   try {
     const user = ensureAuthUser(req, res);
     if (!user) return;
@@ -370,7 +369,7 @@ export const getLibraryPosts = async (req: AuthRequest, res: Response) => {
 // @route   GET /posts/:postId
 // @access  Public (enriched with viewer flags when authenticated)
 // Example request: GET /posts/67f0f9d6764d3188ccf29123
-export const getPostById = async (req: AuthRequest, res: Response) => {
+export const getPostById = async (req: Request, res: Response) => {
   try {
     const parsed = postIdParamsSchema.safeParse(req.params);
     if (!parsed.success) {
@@ -429,7 +428,7 @@ export const getPostById = async (req: AuthRequest, res: Response) => {
 // @desc    Update own post
 // @route   PATCH /posts/:postId
 // @access  Verified
-export const updatePost = async (req: AuthRequest, res: Response) => {
+export const updatePost = async (req: Request, res: Response) => {
   try {
     const user = ensureAuthUser(req, res);
     if (!user) return;
@@ -506,7 +505,7 @@ export const updatePost = async (req: AuthRequest, res: Response) => {
 // @access  Verified
 // Example body:
 // { "title": "How to optimize prompts?", "description": "...", "llmName": "OpenAI" }
-export const createPost = async (req: AuthRequest, res: Response) => {
+export const createPost = async (req: Request, res: Response) => {
   try {
     const user = ensureAuthUser(req, res);
     if (!user) return;
@@ -562,7 +561,7 @@ export const createPost = async (req: AuthRequest, res: Response) => {
 // @route   DELETE /posts/:postId
 // @access  Verified
 // Example request: DELETE /posts/67f0f9d6764d3188ccf29123
-export const deletePost = async (req: AuthRequest, res: Response) => {
+export const deletePost = async (req: Request, res: Response) => {
   try {
     const user = ensureAuthUser(req, res);
     if (!user) return;
@@ -608,7 +607,7 @@ export const deletePost = async (req: AuthRequest, res: Response) => {
 };
 
 const voteOnPost = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   voteType: VoteType,
 ) => {
@@ -668,7 +667,7 @@ const voteOnPost = async (
 // @route   POST /posts/:postId/upvote
 // @access  Verified
 // Example request: POST /posts/67f0f9d6764d3188ccf29123/upvote
-export const upvotePost = async (req: AuthRequest, res: Response) => {
+export const upvotePost = async (req: Request, res: Response) => {
   try {
     return await voteOnPost(req, res, "upvote");
   } catch (error) {
@@ -680,7 +679,7 @@ export const upvotePost = async (req: AuthRequest, res: Response) => {
 // @route   POST /posts/:postId/downvote
 // @access  Verified
 // Example request: POST /posts/67f0f9d6764d3188ccf29123/downvote
-export const downvotePost = async (req: AuthRequest, res: Response) => {
+export const downvotePost = async (req: Request, res: Response) => {
   try {
     return await voteOnPost(req, res, "downvote");
   } catch (error) {
@@ -692,7 +691,7 @@ export const downvotePost = async (req: AuthRequest, res: Response) => {
 // @route   DELETE /posts/:postId/vote
 // @access  Verified
 // Example request: DELETE /posts/67f0f9d6764d3188ccf29123/vote
-export const removeVote = async (req: AuthRequest, res: Response) => {
+export const removeVote = async (req: Request, res: Response) => {
   try {
     const user = ensureAuthUser(req, res);
     if (!user) return;
@@ -734,7 +733,7 @@ export const removeVote = async (req: AuthRequest, res: Response) => {
 // @route   POST /posts/:postId/save
 // @access  Verified
 // Example request: POST /posts/67f0f9d6764d3188ccf29123/save
-export const savePost = async (req: AuthRequest, res: Response) => {
+export const savePost = async (req: Request, res: Response) => {
   try {
     const user = ensureAuthUser(req, res);
     if (!user) return;
@@ -778,7 +777,7 @@ export const savePost = async (req: AuthRequest, res: Response) => {
 // @route   DELETE /posts/:postId/save
 // @access  Verified
 // Example request: DELETE /posts/67f0f9d6764d3188ccf29123/save
-export const unsavePost = async (req: AuthRequest, res: Response) => {
+export const unsavePost = async (req: Request, res: Response) => {
   try {
     const user = ensureAuthUser(req, res);
     if (!user) return;
@@ -809,7 +808,7 @@ export const unsavePost = async (req: AuthRequest, res: Response) => {
 // @route   POST /posts/:postId/comments
 // @access  Verified
 // Example body: { "content": "This explanation helped a lot." }
-export const addComment = async (req: AuthRequest, res: Response) => {
+export const addComment = async (req: Request, res: Response) => {
   try {
     const user = ensureAuthUser(req, res);
     if (!user) return;

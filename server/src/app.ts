@@ -3,8 +3,6 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
-import fs from "fs";
-import path from "path";
 import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
 import { connectDB } from "./config/db";
@@ -38,15 +36,7 @@ app.use(
 
 app.use(compression()); // Compress responses
 
-// Logging
-const logPath: string = path.join(process.cwd(), "logs", "access.log"); // create log file path
-
-fs.mkdirSync(path.dirname(logPath), { recursive: true }); // make sure folder exists (important)
-
-const accessLogStream: fs.WriteStream = fs.createWriteStream(logPath, {
-  flags: "a",
-}); // create write stream
-
+// Logging - Use stdout (Railway captures automatically)
 morgan.token("body", (req: Request) => {
   return JSON.stringify(req.body);
 });
@@ -58,7 +48,6 @@ morgan.token("headers", (req: Request) => {
 app.use(
   morgan(
     ":method :url :status :response-time ms\nbody: :body\nheaders: :headers",
-    { stream: accessLogStream },
   ),
 );
 
