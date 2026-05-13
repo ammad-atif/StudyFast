@@ -97,4 +97,18 @@ export const aiProxyService = {
       throw new UpstreamServiceError(error.message, error.response?.status);
     }
   },
+
+  async globalSemanticSearch(query: string, requestId: string) {
+    try {
+      const response = await fastApiClient.post('/api/search', { query }, {
+        headers: { 'x-request-id': requestId },
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.code === 'FASTAPI_TIMEOUT') {
+        throw new UpstreamTimeoutError();
+      }
+      throw new UpstreamServiceError(error.message, error.response?.status);
+    }
+  },
 };

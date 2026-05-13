@@ -16,12 +16,11 @@ class EmbeddingResponse(BaseModel):
     request_id: Optional[str] = None
 
 class SearchRequest(BaseModel):
-    post_id: str = Field(..., description="The post ID for search")
     query: str = Field(..., description="Search query")
 
 class SearchResult(BaseModel):
-    text: str
-    score: float
+    post_id: str
+    weighted_score: float
 
 class SearchResponse(BaseModel):
     success: bool
@@ -32,6 +31,14 @@ class SearchResponse(BaseModel):
 class QueryRequest(BaseModel):
     post_id: str = Field(..., description="The post ID for query")
     query: Optional[str] = None
+
+
+class SummaryRequest(BaseModel):
+    post_id: str = Field(..., description="The post ID for summary generation")
+
+
+class QuizRequest(BaseModel):
+    post_id: str = Field(..., description="The post ID for quiz generation")
 
 class QueryResponse(BaseModel):
     success: bool

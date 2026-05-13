@@ -51,7 +51,9 @@ api.interceptors.response.use(
     return Promise.reject({
       code: serverError?.code || "UNKNOWN_ERROR",
       details: serverError?.details || null,
+      statusCode: error.response?.status || serverError?.statusCode || null,
       message: serverError?.message || error.message,
+      data: serverError || null,
     });
   },
 );

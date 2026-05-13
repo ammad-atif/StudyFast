@@ -16,5 +16,6 @@ router.post('/answer', protect, requireVerified, aiController.answerQuery);
 router.post('/summary', protect, requireVerified, aiController.generateSummary);
 router.post('/quiz', protect, requireVerified, aiController.generateQuiz);
 router.post('/search', protect, requireVerified, aiController.searchEmbeddings);
+router.post('/semantic-search', aiController.globalSemanticSearch); // no auth for public search
 
 export default router;

@@ -62,6 +62,21 @@ export const answerQuery = async (req: Request, res: Response, next: NextFunctio
 
     logWithRequest(req, 'info', 'Answering query', { postId, query });
 
+    const post = await Post.findById(postId).select('embeddingStatus embeddingError');
+    if (!post) {
+      return sendError(res, 'Post not found', 404, undefined, req.requestId);
+    }
+
+    if (post.embeddingStatus !== 'completed') {
+      return sendError(
+        res,
+        'Embeddings not completed yet',
+        409,
+        post.embeddingStatus ? `Current embedding status: ${post.embeddingStatus}` : 'Embeddings not completed',
+        req.requestId,
+      );
+    }
+
     const answer = await aiProxyService.answerQuery(postId, query, req.requestId);
     return sendSuccess(res, 'Query answered', answer, 200, req.requestId);
   } catch (error: any) {
@@ -123,6 +138,44 @@ export const searchEmbeddings = async (req: Request, res: Response, next: NextFu
 
     const results = await aiProxyService.searchEmbeddings(postId, query, req.requestId);
     return sendSuccess(res, 'Search completed', results, 200, req.requestId);
+  } catch (error: any) {
+    if (error instanceof UpstreamTimeoutError) {
+      return sendError(res, 'Request timeout', 504, error.message, req.requestId);
+    }
+    if (error instanceof UpstreamServiceError) {
+      return sendError(res, error.message, error.statusCode, undefined, req.requestId);
+    }
+    next(error);
+  }
+};
+
+export const globalSemanticSearch = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { query } = req.body;
+    
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return sendError(res, 'Query is required', 400, undefined, req.requestId);
+    }
+
+    logWithRequest(req, 'info', 'Global semantic search', { query });
+
+    const searchResults = await aiProxyService.globalSemanticSearch(query.trim(), req.requestId);
+    
+    // Extract post_ids from results array
+    const results = searchResults?.results || [];
+    const postIds: string[] = results.map((r: any) => r.post_id).filter(Boolean);
+    
+    if (postIds.length === 0) {
+      return sendSuccess(res, 'Search completed', { posts: [] }, 200, req.requestId);
+    }
+
+    // Fetch posts from MongoDB using the IDs returned by semantic search
+    const posts = await Post.find(
+      { _id: { $in: postIds } },
+      { title: 1, description: 1, subject: 1, llmName: 1, createdBy: 1, upvotesCount: 1, downvotesCount: 1, commentsCount: 1, createdAt: 1, updatedAt: 1 }
+    ).populate('createdBy', '_id fullName email');
+
+    return sendSuccess(res, 'Search completed', { posts }, 200, req.requestId);
   } catch (error: any) {
     if (error instanceof UpstreamTimeoutError) {
       return sendError(res, 'Request timeout', 504, error.message, req.requestId);

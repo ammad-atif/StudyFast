@@ -104,11 +104,23 @@ class ConversationRAG:
             if isinstance(match, dict):
                 metadata = match.get("metadata") or {}
                 score = match.get("score")
+                vector_id = match.get("id")
             else:
                 metadata = getattr(match, "metadata", {}) or {}
                 score = getattr(match, "score", None)
+                vector_id = getattr(match, "id", None)
 
-            if metadata.get("chat_id") != post_id:
+            # Accept match if metadata.chat_id matches post_id
+            chat_id_meta = metadata.get("chat_id") if isinstance(metadata, dict) else None
+            accepted = False
+            if chat_id_meta == post_id:
+                accepted = True
+
+            # Fallback: accept if vector id starts with post_id (pattern: {chat_id}_chunk_{i})
+            if not accepted and isinstance(vector_id, str) and vector_id.startswith(f"{post_id}_chunk_"):
+                accepted = True
+
+            if not accepted:
                 continue
 
             relevant_chunks.append({
@@ -206,12 +218,7 @@ class ConversationRAG:
 
             results.append({
                 "post_id": post_id,
-                "best_score": float(best_score),
-                "avg_other_score": float(avg_other),
                 "weighted_score": float(weighted),
-                "chunk_count": len(chunks_sorted),
-                "best_chunk_index": chunk_index or 0,
-                "relevant_text": text or "",
             })
 
         results.sort(key=lambda r: r["weighted_score"], reverse=True)
@@ -358,8 +365,22 @@ class ConversationRAG:
 
         index = self.pipeline.pc.Index(self.pipeline.index_name)
         relevant_chunks = self._query_post_chunks_by_similarity(index, post_id, question, top_k=top_k)
+        # If similarity search returned nothing, fall back to fetching all chunks
         if not relevant_chunks:
-            raise ValueError(f"No relevant chunks found for post_id={post_id}")
+            # Try to fetch all chunks for this post and use them as context
+            texts = self._fetch_post_chunks(index, post_id)
+            if not texts:
+                raise ValueError(f"No relevant chunks found for post_id={post_id}")
+
+            # Build pseudo-chunks list from full texts
+            relevant_chunks = []
+            for i, t in enumerate(texts):
+                relevant_chunks.append({
+                    "score": None,
+                    "chunk_index": i,
+                    "text": t,
+                    "metadata": {"chunk_index": i, "text": t},
+                })
 
         context = "\n\n".join(
             f"[chunk {chunk['chunk_index']}] {chunk['text']}"
@@ -400,3 +421,10 @@ class ConversationRAG:
             "chunks_used": len(relevant_chunks),
             "chunks": relevant_chunks,
         }
+
+    # Backwards-compatible wrappers expected by app.py
+    def answer_question(self, post_id: str, question: str, top_k: int = 5, max_tokens: int = 600) -> dict:
+        return self.conversation_rag_answer(post_id, question, top_k=top_k, max_tokens=max_tokens)
+
+    def generate_summary(self, post_id: str, max_tokens: int = 2000) -> str:
+        return self.summarize_post(post_id, max_tokens=max_tokens)

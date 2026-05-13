@@ -25,7 +25,9 @@ from schemas.api_models import (
     SearchResponse,
     QueryRequest,
     QueryResponse,
+    SummaryRequest,
     SummaryResponse,
+    QuizRequest,
     QuizResponse,
     ApiErrorResponse,
     SearchResult,
@@ -224,13 +226,22 @@ async def answer_query(request_body: QueryRequest, request: Request):
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
     try:
-        answer = rag_service.answer_question(post_id, query)
+        result = rag_service.answer_question(post_id, query)
+        # The RAG service may return a dict with metadata; extract the text answer
+        if isinstance(result, dict):
+            answer_text = result.get("answer") or result.get("response") or str(result)
+        else:
+            answer_text = str(result)
+
         return QueryResponse(
             success=True,
             message="Answer generated",
-            answer=answer,
+            answer=answer_text,
             request_id=request_id,
         )
+    except ValueError as e:
+        # Missing chunks / not found -> 404
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -239,7 +250,7 @@ async def answer_query(request_body: QueryRequest, request: Request):
 
 
 @app.post("/api/summary", response_model=SummaryResponse)
-async def generate_summary(request_body: QueryRequest, request: Request):
+async def generate_summary(request_body: SummaryRequest, request: Request):
     """Generate a summary for a post."""
     global rag_service
     if not rag_service:
@@ -256,6 +267,8 @@ async def generate_summary(request_body: QueryRequest, request: Request):
             summary=summary,
             request_id=request_id,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -264,7 +277,7 @@ async def generate_summary(request_body: QueryRequest, request: Request):
 
 
 @app.post("/api/quiz", response_model=QuizResponse)
-async def generate_quiz(request_body: QueryRequest, request: Request):
+async def generate_quiz(request_body: QuizRequest, request: Request):
     """Generate a quiz for a post."""
     global rag_service
     if not rag_service:
@@ -281,6 +294,8 @@ async def generate_quiz(request_body: QueryRequest, request: Request):
             quiz=quiz if isinstance(quiz, list) else [quiz],
             request_id=request_id,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -290,12 +305,11 @@ async def generate_quiz(request_body: QueryRequest, request: Request):
 
 @app.post("/api/search", response_model=SearchResponse)
 async def search_embeddings(request_body: SearchRequest, request: Request):
-    """Search embeddings for a post."""
+    """Search embeddings globally using semantic search."""
     global rag_service
     if not rag_service:
         raise HTTPException(status_code=500, detail="Pipeline not initialized")
 
-    post_id = request_body.post_id
     query = request_body.query
     request_id = getattr(request.state, "request_id", "unknown")
 
@@ -306,8 +320,8 @@ async def search_embeddings(request_body: SearchRequest, request: Request):
         results = rag_service.semantic_search(query, top_k=5)
         api_results = [
             SearchResult(
-                text=r.get("relevant_text", ""),
-                score=float(r.get("weighted_score", 0))
+                post_id=r.get("post_id"),
+                weighted_score=float(r.get("weighted_score", 0))
             )
             for r in results
         ]

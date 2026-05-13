@@ -863,7 +863,7 @@ export const mergedOpenApiDocument = createDocument({
                 schema: z.object({
                   success: z.literal(true),
                   message: z.string(),
-                  results: z.array(z.object({ text: z.string(), score: z.number() })),
+                  results: z.array(z.object({ post_id: z.string(), weighted_score: z.number() })),
                   request_id: z.string().optional(),
                 }),
               },

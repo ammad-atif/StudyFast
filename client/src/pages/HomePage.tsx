@@ -5,6 +5,8 @@ import { api } from "../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "../components/home/Sidebar";
 import { useHomeFilter } from "../context/HomeFilterContext";
+import { SemanticSearchModal } from "../components/home/SemanticSearchModal";
+import { HelpCircle } from "lucide-react";
 
 type ApiErrorShape = {
   message?: string;
@@ -64,6 +66,7 @@ export const HomePage = () => {
   const [selectedSort, setSelectedSort] = useState<SortBy>("newest");
   const [searchInput, setSearchInput] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
+  const [isSemanticSearchOpen, setIsSemanticSearchOpen] = useState(false);
 
   const { selectedSubject, selectedTags } = useHomeFilter();
 
@@ -126,7 +129,22 @@ export const HomePage = () => {
   }, [postsQuery]);
 
   return (
-    <div className="h-[calc(100vh-4rem)] bg-background-light dark:bg-background-dark">
+    <div className="h-[calc(100vh-4rem)] bg-background-light dark:bg-background-dark relative">
+      {/* Floating Semantic Search Button */}
+      <button
+        onClick={() => setIsSemanticSearchOpen(true)}
+        className="fixed bottom-8 right-8 z-40 w-14 h-14 rounded-full bg-primary text-white shadow-lg hover:bg-slate-800 transition-colors flex items-center justify-center"
+        title="Semantic Search"
+      >
+        <HelpCircle size={24} />
+      </button>
+
+      {/* Semantic Search Modal */}
+      <SemanticSearchModal
+        isOpen={isSemanticSearchOpen}
+        onClose={() => setIsSemanticSearchOpen(false)}
+      />
+
       <main className="w-full max-w-5xl h-full mx-auto flex gap-x-8 px-4 py-6">
         {/* Main Content Area with Sidebar */}
 

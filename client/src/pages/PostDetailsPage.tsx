@@ -14,6 +14,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { CommentDrawer } from "../components/post-details/CommentDrawer";
+import { SummaryModal } from "../components/post-details/SummaryModal";
+import { QuizModal } from "../components/post-details/QuizModal";
+import { RagModal } from "../components/post-details/RagModal";
 import { api } from "../api";
 import { getAvatarUrl } from "../utils/avatar";
 
@@ -70,6 +73,9 @@ const getTimeLabel = (createdAt: string) => {
 export const PostDetailsPage = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isOwnerMenuOpen, setIsOwnerMenuOpen] = useState(false);
+  const [activeAiModal, setActiveAiModal] = useState<
+    "summary" | "quiz" | "rag" | null
+  >(null);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -319,6 +325,28 @@ export const PostDetailsPage = () => {
             >
               View AI Chat
             </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveAiModal("summary")}
+                className="py-2 px-4 bg-primary text-white rounded-2xl font-black hover:bg-slate-800 transition-all shadow-xl shadow-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Generate Summary
+              </button>
+
+              <button
+                onClick={() => setActiveAiModal("quiz")}
+                className="py-2 px-4 bg-primary text-white rounded-2xl font-black hover:bg-slate-800 transition-all shadow-xl shadow-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Generate Quiz
+              </button>
+
+              <button
+                onClick={() => setActiveAiModal("rag")}
+                className="py-2 px-4 bg-primary text-white rounded-2xl font-black hover:bg-slate-800 transition-all shadow-xl shadow-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                RAG
+              </button>
+            </div>
           </div>
         </div>
 
@@ -364,6 +392,27 @@ export const PostDetailsPage = () => {
         onClose={() => setIsDrawerOpen(false)}
         postId={post._id}
         onCommentCreated={refetchPostViews}
+      />
+
+      <SummaryModal
+        isOpen={activeAiModal === "summary"}
+        onClose={() => setActiveAiModal(null)}
+        postId={post._id}
+        postTitle={post.title}
+      />
+
+      <QuizModal
+        isOpen={activeAiModal === "quiz"}
+        onClose={() => setActiveAiModal(null)}
+        postId={post._id}
+        postTitle={post.title}
+      />
+
+      <RagModal
+        isOpen={activeAiModal === "rag"}
+        onClose={() => setActiveAiModal(null)}
+        postId={post._id}
+        postTitle={post.title}
       />
     </main>
   );
