@@ -48,7 +48,10 @@ const getTimeLabel = (createdAt: string) => {
   return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
 };
 
-export const SemanticSearchModal = ({ isOpen, onClose }: SemanticSearchModalProps) => {
+export const SemanticSearchModal = ({
+  isOpen,
+  onClose,
+}: SemanticSearchModalProps) => {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,12 +72,15 @@ export const SemanticSearchModal = ({ isOpen, onClose }: SemanticSearchModalProp
     setResults([]);
 
     try {
-      const response = await api.post<SearchResponse>("/ai/semantic-search", { query: query.trim() });
+      const response = (await api.post<SearchResponse>("/ai/semantic-search", {
+        query: query.trim(),
+      })) as unknown as SearchResponse;
       const posts = response.data?.posts || [];
       setResults(posts);
       setSearched(true);
     } catch (err: unknown) {
-      const message = (err as any)?.message || "Failed to search";
+      const message =
+        (err as { message: string })?.message || "Failed to search";
       setError(message);
       setSearched(true);
     } finally {
@@ -111,8 +117,12 @@ export const SemanticSearchModal = ({ isOpen, onClose }: SemanticSearchModalProp
             <p className="text-[11px] font-black uppercase tracking-[0.28em] text-primary/70">
               Semantic Search
             </p>
-            <h2 className="mt-1 text-2xl font-black text-slate-900">Find Posts by Meaning</h2>
-            <p className="mt-1 text-sm text-slate-500">Search across all posts using natural language</p>
+            <h2 className="mt-1 text-2xl font-black text-slate-900">
+              Find Posts by Meaning
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Search across all posts using natural language
+            </p>
           </div>
 
           <button
@@ -150,7 +160,10 @@ export const SemanticSearchModal = ({ isOpen, onClose }: SemanticSearchModalProp
           {loading && (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="animate-pulse rounded-lg border border-slate-200 p-4 space-y-2">
+                <div
+                  key={i}
+                  className="animate-pulse rounded-lg border border-slate-200 p-4 space-y-2"
+                >
                   <div className="h-4 w-2/3 bg-slate-100 rounded" />
                   <div className="h-3 w-full bg-slate-100 rounded" />
                   <div className="h-3 w-4/5 bg-slate-100 rounded" />
@@ -180,8 +193,12 @@ export const SemanticSearchModal = ({ isOpen, onClose }: SemanticSearchModalProp
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-slate-900 truncate">{post.title}</h3>
-                      <p className="mt-1 text-sm text-slate-600 line-clamp-2">{post.description}</p>
+                      <h3 className="font-bold text-slate-900 truncate">
+                        {post.title}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-600 line-clamp-2">
+                        {post.description}
+                      </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <span className="inline-block rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
                           {post.subject}
