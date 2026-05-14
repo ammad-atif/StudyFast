@@ -29,17 +29,19 @@ router.get("/library", protect, getLibraryPosts);
 router.get("/:postId", optionalProtect, getPostById);
 router.get("/:postId/comments", getComments);
 
-router.post("/", protect, requireVerified, createPost);
-router.delete("/:postId", protect, requireVerified, deletePost);
-router.patch("/:postId", protect, requireVerified, updatePost);
+// Add verified requirement to all post modification routes
 
-router.post("/:postId/upvote", protect, requireVerified, upvotePost);
-router.post("/:postId/downvote", protect, requireVerified, downvotePost);
-router.delete("/:postId/vote", protect, requireVerified, removeVote);
+router.post("/", protect, createPost);
+router.delete("/:postId", protect, deletePost);
+router.patch("/:postId", protect, updatePost);
 
-router.post("/:postId/save", protect, requireVerified, savePost);
-router.delete("/:postId/save", protect, requireVerified, unsavePost);
+router.post("/:postId/upvote", protect, upvotePost);
+router.post("/:postId/downvote", protect, downvotePost);
+router.delete("/:postId/vote", protect, removeVote);
 
-router.post("/:postId/comments", protect, requireVerified, addComment);
+router.post("/:postId/save", protect, savePost);
+router.delete("/:postId/save", protect, unsavePost);
+
+router.post("/:postId/comments", protect, addComment);
 
 export default router;
