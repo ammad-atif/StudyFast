@@ -1,15 +1,19 @@
 import User from "../models/User";
+import { logger } from "./logger";
 
 // import { Resend } from "resend";
 const nodemailer = require("nodemailer");
 // Initialize Resend with your API Key
 // const resend = new Resend(process.env.RESEND_API_KEY);
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
   auth: {
     user: process.env.G_EMAIL,
     pass: process.env.G_PASSWORD,
   },
+  logger: true,
+  debug: true,
 });
 
 interface EmailOptions {
