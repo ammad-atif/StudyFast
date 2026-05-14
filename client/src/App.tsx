@@ -32,33 +32,42 @@ function App() {
 
   // Optionally, you could implement a more robust auth check here (e.g., validate token with backend)
   // For now, we just check if a token exists to determine if user is "logged in"
-  const verified = useAppSelector((state) => state.auth.user?.isVerified);
+  // const verified = useAppSelector((state) => state.auth.user?.isVerified);
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
   return (
     <BrowserRouter>
       <HomeFilterProvider>
         <Navbar />
         <Routes>
-        {authRoutes.map((route) => (
-          <Route
-            key={route.path}
-            path={route.path}
-            element={<AuthPage>{route.element}</AuthPage>}
-          />
-        ))}
-        <Route path="/" element={<HomePage />} />
-        <Route path="/posts/:id" element={<PostDetailsPage />} />
+          {authRoutes.map((route) => (
+            <Route
+              key={route.path}
+              path={route.path}
+              element={<AuthPage>{route.element}</AuthPage>}
+            />
+          ))}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/posts/:id" element={<PostDetailsPage />} />
 
-        {isAuthenticated && <Route path="/profile" element={<ProfilePage />} />}
-        {verified && isAuthenticated && (
+          {isAuthenticated && (
+            <Route path="/profile" element={<ProfilePage />} />
+          )}
+          {/* {verified && isAuthenticated && (
           <>
             <Route path="/create-post" element={<CreatePostPage />} />
             <Route path="/posts/:id/edit" element={<CreatePostPage />} />
             <Route path="/library" element={<LibraryPage />} />{" "}
           </>
-        )}
-        <Route path="*" element={<ErrorPage />} />
-      </Routes>
+        )} */}
+          {isAuthenticated && (
+            <>
+              <Route path="/create-post" element={<CreatePostPage />} />
+              <Route path="/posts/:id/edit" element={<CreatePostPage />} />
+              <Route path="/library" element={<LibraryPage />} />{" "}
+            </>
+          )}
+          <Route path="*" element={<ErrorPage />} />
+        </Routes>
       </HomeFilterProvider>
     </BrowserRouter>
   );
